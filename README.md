@@ -3,7 +3,7 @@
 
 ## Team Schedule
 
-| Week | Track 1 (Agent/Workload) | Track 2 (Infra/Baselines) | Track 3 (Prediction/Analysis) |
+| Week | Mallika (Agent/Workload) | Aditya (Infra/Baselines) | Andrew (Prediction/Analysis) |
 |---|---|---|---|
 | 1–2 | Set up AgenticRAGTracer + comparison workload | Set up vLLM, pick pilot model, confirm A100 | Scope predictor design; **all three** run the lit-watch sweep |
 | 3–4 | Verify task quality on the built agent | Build phase/resource instrumentation + open-loop harness | Add calculator microbenchmark w/ Track 1; sketch confidence-gating math |
