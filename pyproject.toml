@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rag-scheduler"
+version = "0.1.0"
+description = "ReAct RAG agent + phase-labeled tracer for the phase-aware scheduling project"
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.setuptools.packages.find]
+include = ["agent*", "serving*", "prediction*", "replay*"]
+
+[tool.setuptools.package-data]
+"agent.retriever" = ["corpus/*.txt"]
