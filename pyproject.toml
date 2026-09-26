@@ -7,7 +7,10 @@ name = "rag-scheduler"
 version = "0.1.0"
 description = "ReAct RAG agent + phase-labeled tracer for the phase-aware scheduling project"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = ["langgraph>=0.2"]
+
+[project.optional-dependencies]
+test = ["pytest"]
 
 [tool.setuptools.packages.find]
 include = ["agent*", "serving*", "prediction*", "replay*"]

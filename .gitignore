@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+results/*
+!results/summary/
+scripts/probe/logs/
+scripts/probe/results/
+scripts/probe/.probe-state/
+.DS_Store
