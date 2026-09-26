@@ -8,3 +8,5 @@ scripts/probe/logs/
 scripts/probe/results/
 scripts/probe/.probe-state/
 .DS_Store
+data/
+.pytest_cache/

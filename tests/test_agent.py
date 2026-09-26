@@ -1,15 +1,17 @@
 """Behavior and trace-shape checks for the LangGraph ReAct agent."""
 
-from pathlib import Path
-
 import pytest
 
 from agent.graph import LangGraphReActAgent
 from agent.llm_backend import DEFAULT_SCRIPT, MockLLM
 from agent.retriever import LocalRetriever
+from agent.workloads import Document
 from serving.instrumentation.tracer import Tracer
 
-CORPUS = Path(__file__).resolve().parents[1] / "agent" / "retriever" / "corpus"
+DOCS = [
+    Document("france", "France", "Paris is the capital of France."),
+    Document("paris", "Paris", "Paris has a population of about 2.1 million."),
+]
 QUESTION = "What is the population of the capital of France, doubled?"
 
 UNKNOWN_TOOL = ["Thought: hm.\nAction: search[x]", "Thought: done.\nAction: finish[ok]"]
@@ -22,7 +24,7 @@ LLM, RET, TOOL = "llm_generate", "retrieve", "tool_exec"
 
 def _run(script, max_steps=8):
     llm = MockLLM(script, tokens_per_second=1e9, jitter_s=(0.0, 0.0))
-    agent = LangGraphReActAgent(llm, LocalRetriever.from_dir(CORPUS), max_steps=max_steps)
+    agent = LangGraphReActAgent(llm, LocalRetriever.from_documents(DOCS), max_steps=max_steps)
     tracer = Tracer("job")
     result = agent.run("job", QUESTION, tracer)
     return result, tracer.spans

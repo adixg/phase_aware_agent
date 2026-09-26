@@ -11,9 +11,7 @@ dependencies = ["langgraph>=0.2"]
 
 [project.optional-dependencies]
 test = ["pytest"]
+data = ["pyarrow"]  # only for scripts/fetch_workloads.py (HotpotQA parquet -> JSON)
 
 [tool.setuptools.packages.find]
 include = ["agent*", "serving*", "prediction*", "replay*"]
-
-[tool.setuptools.package-data]
-"agent.retriever" = ["corpus/*.txt"]
