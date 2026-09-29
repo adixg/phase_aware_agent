@@ -1,6 +1,38 @@
 # phase_aware_agent
 # RAG Scheduler Project — Team Schedule & Repo Structure
 
+## Setup
+
+What exists so far: a LangGraph ReAct agent ([agent/graph.py](agent/graph.py)), a
+phase tracer ([serving/instrumentation/](serving/instrumentation/)), a toy local
+retriever, and loaders for all four workloads (AgenticRAGTracer, HotpotQA, MuSiQue,
+calculator). There's no vLLM backend yet — everything runs against a scripted
+`MockLLM`, so only the `calculator` workload produces meaningful `correct` results.
+
+```bash
+# 1. Conda env (Python >= 3.10)
+conda create -n phase-aware-agent python=3.10 -y
+conda activate phase-aware-agent
+
+# 2. Install the package + langgraph (editable, so agent/serving/... are importable)
+pip install -e ".[test,data]"   # test: pytest; data: pyarrow, needed only for step 3's HotpotQA fetch
+
+# 3. Download the datasets into ./data (gitignored, ~80MB, network required)
+python scripts/fetch_workloads.py               # all four
+# or just one: python scripts/fetch_workloads.py hotpotqa
+
+# 4. Verify: run the test suite
+pytest tests
+
+# 5. Verify: run one traced job per workload
+python -m agent.run_one --workload calculator --index 0
+python -m agent.run_one --workload agentic_rag_tracer --index 0
+```
+
+Each `run_one` call writes a trace to `results/traces/<job_id>.jsonl` — one JSON line
+per phase span (`llm_generate` / `retrieve` / `tool_exec`), plus a final
+`job_summary` line with `workload`, `task_id`, `answer`, `correct`, etc.
+
 ## Team Schedule
 
 | Week | Mallika (Agent/Workload) | Aditya (Infra/Baselines) | Andrew (Prediction/Analysis) |
