@@ -35,7 +35,10 @@ def _gold_answers(final_answer: str, last_hop: dict) -> tuple[str, ...]:
 
 def _split_doc(doc: str) -> tuple[str, str]:
     title, _, body = doc.partition("\n")
-    return title.strip().strip('"'), body.strip()
+    title = title.strip()
+    if len(title) >= 2 and title[0] == title[-1] == '"':   # CSV-style quoting: inner " is doubled
+        title = title[1:-1].replace('""', '"')
+    return title, body.strip()
 
 
 class AgenticRAGTracer(Workload):

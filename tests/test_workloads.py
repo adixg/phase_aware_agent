@@ -1,6 +1,9 @@
 """Every workload loader must satisfy the same contract; fixtures mirror the real file formats."""
 
 import json
+import unicodedata
+from collections import Counter
+from pathlib import Path
 
 import pytest
 
@@ -129,3 +132,80 @@ def test_pool_documents_dedupes_by_text():
     d = lambda i: Document(doc_id=f"t{i}#hop_1", title="T", text="same")
     tasks = [Task(task_id=f"w/{i}", workload="w", question="q", gold_answers=("a",), documents=(d(i),)) for i in range(3)]
     assert [x.doc_id for x in pool_documents(tasks)] == ["t0#hop_1"]
+
+
+def test_split_doc_handles_real_title_formats():
+    from agent.workloads.agentic_rag_tracer import _split_doc
+    assert _split_doc('"Santry"\nbody') == ("Santry", "body")
+    assert _split_doc("Dumfries\nbody") == ("Dumfries", "body")          # ~5% of real passages have no quotes
+    assert _split_doc('"Joaquín ""Jack"" García"\nbody')[0] == 'Joaquín "Jack" García'
+
+
+# --- real-format fixtures: untouched records copied from the six AgenticRAGTracer files ---
+
+REAL_DIR = Path(__file__).parent / "fixtures"
+
+
+@pytest.fixture(scope="module")
+def real_tasks():
+    return {t.task_id.split("/", 1)[1]: t for t in get_workload("agentic_rag_tracer", REAL_DIR).tasks()}
+
+
+def test_real_records_load_with_expected_shape(real_tasks):
+    assert len(real_tasks) == 10
+    assert Counter(t.meta["num_hops"] for t in real_tasks.values()) == {2: 6, 3: 2, 4: 2}
+    assert Counter(t.meta["category"] for t in real_tasks.values()) == {"comparison": 5, "inference": 5}
+    for t in real_tasks.values():
+        assert len(t.documents) == t.meta["num_hops"] == len(t.meta["hop_questions"])
+        assert all(d.title and d.text for d in t.documents)
+        assert t.meta["final_answer"] == t.gold_answers[0]
+
+
+def test_real_titles_unquoted_and_csv_escaped(real_tasks):
+    assert [d.title for d in real_tasks["2hop_comparison/2"].documents] == ["Aik Thi Misaal", "Denma"]  # no quotes in source
+    # the source text is Unicode-decomposed (NFD), so compare after composing
+    title = real_tasks["2hop_inference/2"].documents[0].title
+    assert unicodedata.normalize("NFC", title) == 'Joaquín "Jack" García'
+
+
+def test_real_aliases_come_from_last_hop_and_are_filtered(real_tasks):
+    t = real_tasks["2hop_comparison/0"]
+    assert "RLL(1,3) encoding" in t.gold_answers and len(t.gold_answers) == 9
+    # alias list describes something else ("The end of Aik Thi Misaal"): only the final answer survives
+    assert real_tasks["2hop_comparison/2"].gold_answers == ("Aik Thi Misaal",)
+    # "#" alias normalizes to nothing and is dropped; "No." keeps its real aliases
+    yes_no = real_tasks["2hop_inference/1"]
+    assert yes_no.gold_answers == ('No.', 'Number', 'No', 'N°')
+
+
+def test_real_gold_matches_and_wrong_answers_do_not(real_tasks):
+    w = get_workload("agentic_rag_tracer", REAL_DIR)
+    for t in real_tasks.values():
+        assert all(w.is_correct(t, g) for g in t.gold_answers)
+        assert not w.is_correct(t, "")
+        assert not w.is_correct(t, "definitely wrong 12345")
+        assert not any(w.is_correct(t, o.gold_answers[0]) for o in real_tasks.values() if o is not t)
+    # comparison: the other candidate named in the question is wrong
+    t = real_tasks["2hop_comparison/1"]
+    assert w.is_correct(t, "the carbon12 building.") and not w.is_correct(t, "William Minott House")
+    assert not w.is_correct(t, "William Minott House and Carbon12 building")
+
+
+def test_real_sample_is_deterministic_and_representative():
+    w = get_workload("agentic_rag_tracer", REAL_DIR)
+    ids = lambda **kw: [t.task_id for t in w.tasks(**kw)]
+    assert ids(limit=3, seed=0) == ids(limit=3, seed=0) == [
+        "agentic_rag_tracer/2hop_comparison/0", "agentic_rag_tracer/3hop_comparison/0", "agentic_rag_tracer/4hop_inference/0"]
+    assert ids(limit=3, seed=1) != ids(limit=3, seed=0)
+    assert ids(limit=3, seed=0) == sorted(ids(limit=3, seed=0), key=ids().index)   # file order preserved
+    assert ids(limit=100) == ids()                                                # limit above size -> everything
+    sample = list(w.tasks(limit=3, seed=0))
+    assert sorted(t.meta["num_hops"] for t in sample) == [2, 3, 4]
+
+
+def test_real_pool_has_unique_ids_and_dedupes_text(real_tasks):
+    tasks = list(real_tasks.values())
+    docs = [d for t in tasks for d in t.documents]
+    assert len({d.doc_id for d in docs}) == len(docs)
+    pooled = pool_documents(tasks)
+    assert len(pooled) == len({(d.title, d.text) for d in docs}) <= len(docs)
