@@ -15,10 +15,22 @@ import re
 from pathlib import Path
 from typing import Iterator
 
-from .base import DEFAULT_DATA_DIR, Document, Task, Workload, select
+from .base import DEFAULT_DATA_DIR, Document, Task, Workload, normalize_answer, select
 
 _HOP_RE = re.compile(r"^hop_(\d+)$")
 _FILE_RE = re.compile(r"^(\d+)hop_(\w+)\.jsonl$")
+
+
+def _gold_answers(final_answer: str, last_hop: dict) -> tuple[str, ...]:
+    """`final_answer` plus the last hop's `optional_answers`. Aliases only appear on hop 2
+    onward, and the last hop's list is the one that describes `final_answer`. In ~1.5% of
+    records it describes something else (e.g. "The birth of X" for gold "X"), so aliases
+    are kept only when the list contains `final_answer`. Aliases that normalize to nothing
+    (e.g. "#", "An") are dropped, since they would match an empty answer."""
+    aliases = last_hop.get("optional_answers", [])
+    if normalize_answer(final_answer) not in {normalize_answer(a) for a in aliases}:
+        aliases = []
+    return tuple(a for a in dict.fromkeys([final_answer, *aliases]) if normalize_answer(a))
 
 
 def _split_doc(doc: str) -> tuple[str, str]:
@@ -50,17 +62,16 @@ class AgenticRAGTracer(Workload):
             for n, hop in hops:
                 title, body = _split_doc(hop.get("doc", ""))
                 docs.append(Document(doc_id=f"{task_id}#hop_{n}", title=title, text=body))
-            last = hops[-1][1]
-            gold = dict.fromkeys([r["final_answer"], *last.get("optional_answers", [])])
             yield Task(
                 task_id=task_id,
                 workload=self.name,
                 question=r["final_question"],
-                gold_answers=tuple(gold),
+                gold_answers=_gold_answers(r["final_answer"], hops[-1][1]),
                 documents=tuple(docs),
                 meta={
                     "num_hops": len(hops),
                     "category": _FILE_RE.match(stem + ".jsonl").group(2),
                     "hop_questions": [h["question"] for _, h in hops],
+                    "final_answer": r["final_answer"],
                 },
             )

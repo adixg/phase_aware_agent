@@ -30,7 +30,7 @@ def _write_fixtures(root):
         rows = []
         for i in range(3):
             row = {f"hop_{h}": {"question": f"h{h}?", "answer": "a", "doc": f'"Title {h}"\nbody {h}',
-                                "optional_answers": [f"Opt {i}"]} for h in range(1, n + 1)}
+                                "optional_answers": [f"Final {i}", f"Opt {i}"]} for h in range(1, n + 1)}
             rows.append({**row, "final_question": f"final {name} {i}?", "final_answer": f"Final {i}"})
         (ar / f"{name}.jsonl").write_text("\n".join(map(json.dumps, rows)))
 
@@ -88,7 +88,7 @@ def test_agentic_rag_tracer_hops_and_docs(data_dir):
     three = next(t for t in tasks if t.meta["num_hops"] == 3)
     assert three.meta["category"] == "comparison" and len(three.documents) == 3
     assert three.documents[0].title == "Title 1" and three.documents[0].text == "body 1"
-    assert "Opt 0" in tasks[0].gold_answers
+    assert tasks[0].gold_answers == ("Final 0", "Opt 0") and tasks[0].meta["final_answer"] == "Final 0"
 
 
 def test_calculator_gold_matches_safe_eval():
@@ -103,3 +103,29 @@ def test_calculator_gold_matches_safe_eval():
 def test_unknown_workload():
     with pytest.raises(ValueError):
         get_workload("nope")
+
+
+def test_normalization_keeps_numbers_distinct_and_strips_accents():
+    from agent.workloads.base import normalize_answer as n
+    assert n("15,615") == "15615" and n("15,615") != n("15.615") and n("10.3%") != n("103")
+    assert n("Café") == n("cafe") and n("U.S.") == "us"
+
+
+def test_agentic_rag_tracer_drops_unrelated_or_empty_aliases(tmp_path):
+    ar = tmp_path / "agentic_rag_tracer"
+    ar.mkdir()
+    hop = lambda opts: {"question": "q", "answer": "a", "doc": '"T"\nbody', "optional_answers": opts}
+    rows = [
+        {"hop_1": hop([]), "hop_2": hop(["Tarmo Mitt", "#", "An"]), "final_question": "q1?", "final_answer": "Tarmo Mitt"},
+        {"hop_1": hop([]), "hop_2": hop(["The birth of X"]), "final_question": "q2?", "final_answer": "X"},
+    ]
+    (ar / "2hop_inference.jsonl").write_text("\n".join(map(json.dumps, rows)))
+    a, b = get_workload("agentic_rag_tracer", tmp_path).tasks()
+    assert a.gold_answers == ("Tarmo Mitt",) and b.gold_answers == ("X",)
+
+
+def test_pool_documents_dedupes_by_text():
+    from agent.workloads import Document
+    d = lambda i: Document(doc_id=f"t{i}#hop_1", title="T", text="same")
+    tasks = [Task(task_id=f"w/{i}", workload="w", question="q", gold_answers=("a",), documents=(d(i),)) for i in range(3)]
+    assert [x.doc_id for x in pool_documents(tasks)] == ["t0#hop_1"]

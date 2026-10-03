@@ -11,6 +11,7 @@ from __future__ import annotations
 import random
 import re
 import string
+import unicodedata
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -53,18 +54,28 @@ class Workload(ABC):
 
 
 def pool_documents(tasks: Iterable[Task]) -> list[Document]:
-    """Corpus for a retriever serving these tasks: their passages, deduplicated by id."""
-    seen: dict[str, Document] = {}
+    """Corpus for a retriever serving these tasks: their passages, deduplicated by
+    (title, text). The same passage often backs several tasks under different ids;
+    the first id seen is kept."""
+    seen: dict[tuple[str, str], Document] = {}
     for t in tasks:
         for d in t.documents:
-            seen.setdefault(d.doc_id, d)
+            seen.setdefault((d.title, d.text), d)
     return list(seen.values())
 
 
+_PUNCT = set(string.punctuation) - {"."}
+
+
 def normalize_answer(s: str) -> str:
-    """Standard SQuAD-style normalization: lowercase, drop punctuation/articles/extra spaces."""
-    s = s.lower()
-    s = "".join(ch for ch in s if ch not in set(string.punctuation))
+    """SQuAD-style normalization: lowercase, strip accents, drop punctuation/articles/extra
+    spaces. Thousands commas and decimal points inside numbers are handled so that
+    "15,615" and "15.615" (or "10.3" and "103") do not collide."""
+    s = unicodedata.normalize("NFKD", s.lower())
+    s = "".join(ch for ch in s if not unicodedata.combining(ch))
+    s = re.sub(r"(?<=\d),(?=\d{3}\b)", "", s)
+    s = "".join(ch for ch in s if ch not in _PUNCT)
+    s = re.sub(r"(?<!\d)\.|\.(?!\d)", "", s)
     s = re.sub(r"\b(a|an|the)\b", " ", s)
     return " ".join(s.split())
 
