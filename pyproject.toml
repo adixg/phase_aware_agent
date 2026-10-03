@@ -10,7 +10,8 @@ requires-python = ">=3.10"
 dependencies = ["langgraph>=0.2"]
 
 [project.optional-dependencies]
-test = ["pytest"]
+test = ["pytest", "numpy"]
+embedding = ["numpy", "sentence-transformers"]  # agent/retriever/embedding.py
 data = ["pyarrow"]  # only for scripts/fetch_workloads.py (HotpotQA parquet -> JSON)
 
 [tool.setuptools.packages.find]

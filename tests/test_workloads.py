@@ -209,3 +209,17 @@ def test_real_pool_has_unique_ids_and_dedupes_text(real_tasks):
     assert len({d.doc_id for d in docs}) == len(docs)
     pooled = pool_documents(tasks)
     assert len(pooled) == len({(d.title, d.text) for d in docs}) <= len(docs)
+
+
+def test_reduced_slice_is_stratified_deterministic_and_checked():
+    from agent.workloads.agentic_rag_tracer import SLICE_PLAN
+    assert sum(SLICE_PLAN.values()) == 100
+    w = get_workload("agentic_rag_tracer", REAL_DIR)
+    plan = {(2, "comparison"): 2, (3, "inference"): 1, (4, "comparison"): 1}
+    a, b = w.reduced_slice(plan, seed=5), w.reduced_slice(plan, seed=5)
+    assert [t.task_id for t in a] == [t.task_id for t in b]
+    assert Counter((t.meta["num_hops"], t.meta["category"]) for t in a) == plan
+    file_order = [t.task_id for t in w.tasks()]
+    assert [t.task_id for t in a] == sorted((t.task_id for t in a), key=file_order.index)
+    with pytest.raises(ValueError):
+        w.reduced_slice({(2, "comparison"): 50})
