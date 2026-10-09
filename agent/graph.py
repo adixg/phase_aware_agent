@@ -8,6 +8,7 @@ the graph nodes, so the trace schema is unchanged by the migration.
 
 from __future__ import annotations
 
+import re
 from typing import Optional, TypedDict
 
 from langgraph.graph import END, StateGraph
@@ -26,6 +27,13 @@ class AgentState(TypedDict):
     arg: Optional[str]
     answer: Optional[str]
     success: bool
+    searched: list[str]      # normalized retrieve queries already run in this job
+    repeat: bool             # the latest Action re-ran one of them
+
+
+def _norm_query(q: str) -> str:
+    """Case/punctuation/spacing-insensitive form, so "Paris  population?" repeats "paris population"."""
+    return " ".join(re.sub(r"[^\w\s]", " ", q.lower()).split())
 
 
 class LangGraphReActAgent:
@@ -34,6 +42,7 @@ class LangGraphReActAgent:
     generate --(retrieve|calculator|unknown)--> tool node --> generate ...
              --(finish)--> finish --> END
              --(no parseable action)--> parse_error --> END
+             --(retrieve repeating an earlier query)--> repeat_search --> generate ...
     The loop also ends once `max_steps` generations have run.
     """
 
@@ -52,6 +61,8 @@ class LangGraphReActAgent:
             "arg": None,
             "answer": None,
             "success": False,
+            "searched": [],
+            "repeat": False,
         }
         # ~2 node visits per step, plus slack for the terminal node.
         final = graph.invoke(initial, {"recursion_limit": 2 * self.max_steps + 5})
@@ -89,15 +100,21 @@ class LangGraphReActAgent:
                 # The model's raw turn (Thought + Action): shows why a step ran
                 # long, and is input for next-phase prediction later.
                 meta["output_text"] = text
-            match = _ACTION_RE.search(text)
-            tool = match.group(1).lower() if match else None
-            arg = match.group(2).strip() if match else None
+                match = _ACTION_RE.search(text)
+                tool = match.group(1).lower() if match else None
+                arg = match.group(2).strip() if match else None
+                # Small models re-run the same search despite the prompt; the repeat
+                # returns the same passages and only pads the job with no-op
+                # retrieve/generate cycles. It is not executed (see repeat_search).
+                repeat = tool == "retrieve" and _norm_query(arg) in state["searched"]
+                if repeat:
+                    meta["repeat_blocked"] = True
             # Models often keep going after the Action and invent its result (or a
             # second Action); carrying that forward makes later steps treat the
             # invention as fact. Only the turn up to the first Action enters the
             # transcript; meta.output_text keeps the raw output.
             turn = text[: match.end()] if match else text
-            return {"transcript": state["transcript"] + [turn], "tool": tool, "arg": arg}
+            return {"transcript": state["transcript"] + [turn], "tool": tool, "arg": arg, "repeat": repeat}
 
         def parse_error(state: AgentState) -> dict:
             return {"transcript": state["transcript"] + ["Observation: could not parse an action; stopping."]}
@@ -113,7 +130,12 @@ class LangGraphReActAgent:
                 meta["score"] = hits[0].score if hits else 0.0
                 meta["doc_ids"] = [h.doc_id for h in hits]
             observation = "\n".join(f"[{i}] {h.text}" for i, h in enumerate(hits, 1)) if hits else "No results found."
-            return _observe(state, observation)
+            return {**_observe(state, observation), "searched": state["searched"] + [_norm_query(arg)]}
+
+        def repeat_search(state: AgentState) -> dict:
+            # No RETRIEVE span: the generate span that asked carries meta.repeat_blocked.
+            return _observe(state, f'You already searched for "{state["arg"]}". '
+                                   "Use different words, or finish with your answer.")
 
         def calculator(state: AgentState) -> dict:
             step, arg = state["step"], state["arg"]
@@ -139,6 +161,8 @@ class LangGraphReActAgent:
             tool = state["tool"]
             if tool is None:
                 return "parse_error"
+            if state["repeat"]:
+                return "repeat_search"
             if tool in ("finish", "retrieve", "calculator"):
                 return tool
             return "unknown_tool"
@@ -152,14 +176,15 @@ class LangGraphReActAgent:
         g.add_node("retrieve", retrieve)
         g.add_node("calculator", calculator)
         g.add_node("unknown_tool", unknown_tool)
+        g.add_node("repeat_search", repeat_search)
 
         g.set_entry_point("generate")
         g.add_conditional_edges(
             "generate",
             route_action,
-            ["parse_error", "finish", "retrieve", "calculator", "unknown_tool"],
+            ["parse_error", "finish", "retrieve", "calculator", "unknown_tool", "repeat_search"],
         )
-        for tool_node in ("retrieve", "calculator", "unknown_tool"):
+        for tool_node in ("retrieve", "calculator", "unknown_tool", "repeat_search"):
             g.add_conditional_edges(tool_node, route_after_tool, ["generate", END])
         g.add_edge("parse_error", END)
         g.add_edge("finish", END)

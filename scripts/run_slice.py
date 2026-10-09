@@ -58,6 +58,8 @@ def main() -> None:
     p.add_argument("--base-url", default="http://localhost:8000/v1")
     p.add_argument("--model", default=None, help="default: whatever the server is serving")
     p.add_argument("--max-tokens", type=int, default=256)
+    p.add_argument("--max-steps", type=int, default=10,
+                   help="generations per job; 4-hop questions need >= 5 even when every search hits")
     p.add_argument("--no-thinking", action="store_true",
                    help="turn off a hybrid model's <think> block (Qwen3: enable_thinking=False)")
     p.add_argument("--retriever", choices=["bow", "embedding"], default="bow")
@@ -119,7 +121,7 @@ def main() -> None:
         t0 = time.time()
         try:
             res = run_one(task, run_dir / f"{job_id}.jsonl", workload=workload, job_id=job_id,
-                          llm=llm, retriever=retriever)
+                          llm=llm, retriever=retriever, max_steps=args.max_steps)
             entry = {k: res[k] for k in ("job_id", "success", "correct", "answer")}
         except Exception as e:
             entry = {"job_id": job_id, "error": f"{type(e).__name__}: {e}"}

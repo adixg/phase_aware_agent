@@ -47,12 +47,13 @@ def run_one(
     job_id: str | None = None,
     llm: LLMBackend | None = None,
     retriever=None,
+    max_steps: int = 8,
 ) -> dict:
     """`retriever` is shared across jobs when given (the 50-100 job runs build it once over
     the slice corpus); by default each job gets a private one over its own passages."""
     job_id = job_id or task.task_id
     retriever = retriever or LocalRetriever.from_documents(pool_documents([task]))
-    agent = LangGraphReActAgent(llm or MockLLM(mock_script(task)), retriever)
+    agent = LangGraphReActAgent(llm or MockLLM(mock_script(task)), retriever, max_steps=max_steps)
 
     tracer = Tracer(job_id)
     result = agent.run(job_id, task.question, tracer)

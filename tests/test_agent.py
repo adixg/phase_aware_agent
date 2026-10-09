@@ -74,9 +74,22 @@ def test_text_after_first_action_stays_out_of_transcript():
 
 
 def test_max_steps_caps_the_loop():
+    # NEVER_FINISHES repeats one query: only the first runs, the repeats are blocked
     result, spans = _run(NEVER_FINISHES, max_steps=3)
-    assert [s.phase for s in spans] == [LLM, RET] * 3
+    assert [s.phase for s in spans] == [LLM, RET, LLM, LLM]
     assert not result.success and result.answer is None
+
+
+def test_repeated_search_is_blocked_not_run():
+    script = ["Thought: a.\nAction: retrieve[Capital of  France?]",
+              "Thought: b.\nAction: retrieve[capital of france]",          # same query, normalized
+              "Thought: c.\nAction: retrieve[population of Paris]",
+              "Thought: d.\nAction: finish[Paris]"]
+    result, spans = _run(script)
+    assert [s.phase for s in spans] == [LLM, RET, LLM, LLM, RET, LLM]
+    assert [s.meta.get("repeat_blocked") for s in spans if s.phase == LLM] == [None, True, None, None]
+    assert 'Observation: You already searched for "capital of france". Use different words, or finish with your answer.' in result.transcript
+    assert result.success and result.answer == "Paris"
 
 
 def test_retrieve_returns_numbered_top_k_passages():
