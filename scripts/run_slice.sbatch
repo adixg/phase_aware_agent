@@ -4,6 +4,7 @@
 #   sbatch scripts/run_slice.sbatch                   # 20 tasks
 #   LIMIT=100 sbatch scripts/run_slice.sbatch         # whole slice
 #   MODEL=/path/to/model/dir sbatch scripts/run_slice.sbatch
+#   sbatch scripts/run_slice.sbatch --retriever embedding   # extra args go to run_slice.py
 #
 # Submit from the repo root. Expects the env at ~/scratch/conda-envs/paa, the
 # model already downloaded (compute nodes are offline), and the dataset at
@@ -61,7 +62,7 @@ for _ in $(seq 120); do                     # up to 10 min for weights + CUDA gr
 done
 curl -sf localhost:8000/health >/dev/null || { echo "vLLM not healthy after 10 min"; exit 1; }
 
-python scripts/run_slice.py --llm vllm --limit "$LIMIT" --run-id "$RUN_ID" --out-dir "${LOCAL%/*}" || STATUS=$?
+python scripts/run_slice.py --llm vllm --limit "$LIMIT" --run-id "$RUN_ID" --out-dir "${LOCAL%/*}" "$@" || STATUS=$?
 
 cp -r "$LOCAL" results/traces/
 echo "traces: results/traces/${RUN_ID}"
