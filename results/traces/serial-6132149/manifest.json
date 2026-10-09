@@ -1,0 +1,172 @@
+{
+  "run_id": "serial-6132149",
+  "mode": "serial",
+  "started_at": 1791581195.6425178,
+  "host": "atl1-1-03-007-35-0.pace.gatech.edu",
+  "gpu": "NVIDIA A100-PCIE-40GB",
+  "git_commit": "17246db",
+  "llm": "vllm",
+  "model": "meta-llama/Llama-3.1-8B-Instruct",
+  "args": {
+    "data_dir": null,
+    "seed": 0,
+    "limit": 20,
+    "llm": "vllm",
+    "base_url": "http://localhost:8000/v1",
+    "model": null,
+    "max_tokens": 256,
+    "no_thinking": false,
+    "retriever": "embedding",
+    "embedding_model": "BAAI/bge-small-en-v1.5",
+    "run_id": "serial-6132149",
+    "out_dir": "/tmp"
+  },
+  "num_tasks": 20,
+  "corpus_docs": 251,
+  "jobs": [
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_197",
+      "success": true,
+      "correct": false,
+      "answer": "804.0 vs 3,034.0",
+      "wall_s": 4.655
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_388",
+      "success": true,
+      "correct": false,
+      "answer": "1,734.0",
+      "wall_s": 1.803
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_456",
+      "success": true,
+      "correct": false,
+      "answer": "6.4",
+      "wall_s": 3.475
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_155",
+      "success": true,
+      "correct": true,
+      "answer": "135-140 pounds",
+      "wall_s": 4.459
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_244",
+      "success": true,
+      "correct": false,
+      "answer": "November 1992",
+      "wall_s": 2.222
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_248",
+      "success": true,
+      "correct": true,
+      "answer": "Blu-ray Disc",
+      "wall_s": 1.9
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_298",
+      "success": true,
+      "correct": false,
+      "answer": "Lieutenant colonel",
+      "wall_s": 2.507
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_386",
+      "success": true,
+      "correct": true,
+      "answer": "Radcliffe College",
+      "wall_s": 1.552
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_66",
+      "success": true,
+      "correct": false,
+      "answer": "Collingdale Pennsylvania per capita income 2000 vs North Judson Indiana per capita income 2000",
+      "wall_s": 4.754
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_98",
+      "success": true,
+      "correct": false,
+      "answer": "Quadricentennial Pavilion chief architect",
+      "wall_s": 3.117
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_107",
+      "success": true,
+      "correct": false,
+      "answer": "East Vietnam Sea",
+      "wall_s": 3.251
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_124",
+      "success": true,
+      "correct": true,
+      "answer": "29 March 1964",
+      "wall_s": 1.491
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_33",
+      "success": true,
+      "correct": false,
+      "answer": "Cliviger Lancashire",
+      "wall_s": 4.815
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_38",
+      "success": true,
+      "correct": true,
+      "answer": "Warner Music Group",
+      "wall_s": 4.13
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_49",
+      "success": true,
+      "correct": true,
+      "answer": "Annie",
+      "wall_s": 5.296
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_51",
+      "success": true,
+      "correct": false,
+      "answer": "Tsar Nicholas II parent",
+      "wall_s": 6.46
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_106",
+      "success": true,
+      "correct": true,
+      "answer": "Patapsco River",
+      "wall_s": 4.028
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_comparison_25",
+      "success": true,
+      "correct": false,
+      "answer": "Nassau County",
+      "wall_s": 6.588
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_inference_61",
+      "success": true,
+      "correct": true,
+      "answer": "6",
+      "wall_s": 4.391
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_inference_62",
+      "success": true,
+      "correct": false,
+      "answer": "Cardiff city centre became a city in 1905",
+      "wall_s": 7.909
+    }
+  ],
+  "finished_at": 1791581274.4816725,
+  "num_succeeded": 20,
+  "num_correct": 8,
+  "num_errors": 0
+}

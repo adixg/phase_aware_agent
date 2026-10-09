@@ -1,0 +1,23 @@
+---------------------------------------
+Begin Slurm Prolog: Oct-09-2026 17:20:43
+Job ID:    6132150
+User ID:   aghosh367
+Account:   coc
+Job name:  paa-slice
+Partition: ice-gpu
+QOS:       coc-ice
+---------------------------------------
+node atl1-1-01-005-11-0.pace.gatech.edu  gpu NVIDIA A40  model Qwen/Qwen2.5-7B-Instruct (/home/hice1/aghosh367/scratch/hf_cache/hub/models--Qwen--Qwen2.5-7B-Instruct/snapshots/a09a35458c702b33eeacc393d103063234e8bc28/)
+vLLM exited; see logs/vllm-6132150.log
+---------------------------------------
+Begin Slurm Epilog: Oct-09-2026 17:25:03
+Job ID:        6132150
+User ID:       aghosh367
+Account:       coc
+Job name:      paa-slice
+Resources:     cpu=8,gres/gpu:a40=1,mem=32G,node=1
+Rsrc Used:     cput=00:34:40,vmem=0,walltime=00:04:20,mem=3840924K,energy_used=0
+Partition:     ice-gpu
+QOS:           coc-ice
+Nodes:         atl1-1-01-005-11-0
+---------------------------------------
