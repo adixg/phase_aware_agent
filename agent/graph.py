@@ -80,6 +80,9 @@ class LangGraphReActAgent:
                     text = out
                     meta["prompt_tokens"] = len(prompt.split())
                     meta["output_tokens"] = len(text.split())
+                # The model's raw turn (Thought + Action): shows why a step ran
+                # long, and is input for next-phase prediction later.
+                meta["output_text"] = text
             match = _ACTION_RE.search(text)
             tool = match.group(1).lower() if match else None
             arg = match.group(2).strip() if match else None

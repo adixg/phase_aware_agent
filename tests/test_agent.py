@@ -36,7 +36,7 @@ def test_default_script_trace_shape():
     assert [s.step for s in spans] == list(range(7))
     assert result.success
     assert result.answer == "The population of Paris, doubled, is approximately 4.2 million."
-    assert sorted(spans[0].meta) == ["output_tokens", "prompt_tokens", "step"]
+    assert sorted(spans[0].meta) == ["output_text", "output_tokens", "prompt_tokens", "step"]
     assert sorted(spans[1].meta) == ["query", "score", "step", "top_doc"]
     assert sorted(spans[5].meta) == ["expr", "result", "step", "tool"]
 
