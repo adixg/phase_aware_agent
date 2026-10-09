@@ -223,3 +223,21 @@ def test_reduced_slice_is_stratified_deterministic_and_checked():
     assert [t.task_id for t in a] == sorted((t.task_id for t in a), key=file_order.index)
     with pytest.raises(ValueError):
         w.reduced_slice({(2, "comparison"): 50})
+
+
+def test_dates_compare_equal_across_formats():
+    from agent.workloads.base import normalize_answer as n
+    gold = n("1964-03-29")
+    for variant in ["29 March 1964", "March 29, 1964.", "Mar. 29th 1964", "On 29 March 1964", "1964.03.29", "1964 03 29"]:
+        assert n(variant) == gold, variant
+    assert n("June 1959") == n("1959-06")
+    for different in ["1964-03-30", "30 March 1964", "March 1964", "1964", "29 March 1965", "29 February 1965"]:
+        assert n(different) != gold, different
+    assert n("Late September 2014") == "late september 2014"      # only whole-answer dates are converted
+
+
+def test_agentic_rag_tracer_date_answer_is_scored_correct():
+    w = get_workload("agentic_rag_tracer", REAL_DIR)
+    task = Task(task_id="t", workload="agentic_rag_tracer", question="q",
+                gold_answers=("1964-03-29", "March 29, 1964", "29 Mar 1964"))   # real alias list lacks "29 March 1964"
+    assert w.is_correct(task, "29 March 1964") and not w.is_correct(task, "28 March 1964")
