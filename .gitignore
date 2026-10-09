@@ -10,3 +10,4 @@ scripts/probe/.probe-state/
 .DS_Store
 data/
 .pytest_cache/
+!results/traces/

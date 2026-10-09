@@ -1,0 +1,51 @@
+{
+  "run_id": "serial-6130627",
+  "mode": "serial",
+  "started_at": 1791574413.1406384,
+  "host": "atl1-1-03-007-33-0.pace.gatech.edu",
+  "git_commit": "6eae30f",
+  "llm": "vllm",
+  "model": "/home/hice1/aghosh367/scratch/hf_cache/hub/models--meta-llama--Llama-3.1-8B-Instruct/snapshots/0e9e39f249a16976918f6564b8830bc894c89659/",
+  "args": {
+    "data_dir": null,
+    "seed": 0,
+    "limit": 3,
+    "llm": "vllm",
+    "base_url": "http://localhost:8000/v1",
+    "model": null,
+    "max_tokens": 256,
+    "retriever": "bow",
+    "embedding_model": "BAAI/bge-small-en-v1.5",
+    "run_id": "serial-6130627",
+    "out_dir": "/tmp"
+  },
+  "num_tasks": 3,
+  "corpus_docs": 251,
+  "jobs": [
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_98",
+      "success": true,
+      "correct": true,
+      "answer": "Carmelo Casas",
+      "wall_s": 4.449
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_124",
+      "success": true,
+      "correct": false,
+      "answer": "29 March 1964",
+      "wall_s": 2.325
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_inference_62",
+      "success": false,
+      "correct": false,
+      "answer": null,
+      "wall_s": 17.179
+    }
+  ],
+  "finished_at": 1791574437.1215365,
+  "num_succeeded": 2,
+  "num_correct": 1,
+  "num_errors": 0
+}

@@ -1,0 +1,29 @@
+---------------------------------------
+Begin Slurm Prolog: Oct-09-2026 16:31:39
+Job ID:    6131640
+User ID:   aghosh367
+Account:   coc
+Job name:  paa-slice
+Partition: ice-gpu
+QOS:       coc-ice
+---------------------------------------
+node atl1-1-03-007-35-0.pace.gatech.edu  gpu NVIDIA A100-PCIE-40GB  model meta-llama/Llama-3.1-8B-Instruct (/home/hice1/aghosh367/scratch/hf_cache/hub/models--meta-llama--Llama-3.1-8B-Instruct/snapshots/0e9e39f249a16976918f6564b8830bc894c89659/)
+Loading weights:   0%|          | 0/199 [00:00<?, ?it/s]Loading weights: 100%|██████████| 199/199 [00:00<00:00, 4973.02it/s]
+run serial-6131640: 3 tasks, 251 passages, llm=vllm model=meta-llama/Llama-3.1-8B-Instruct -> /tmp/serial-6131640
+[1/3] agentic_rag_tracer_3hop_comparison_98 5.9s success=False correct=False
+[2/3] agentic_rag_tracer_3hop_comparison_124 2.3s success=True correct=False
+[3/3] agentic_rag_tracer_4hop_inference_62 8.8s success=False correct=False
+done: 1/3 finished, 0 correct, 0 errors
+traces: results/traces/serial-6131640
+---------------------------------------
+Begin Slurm Epilog: Oct-09-2026 16:35:33
+Job ID:        6131640
+User ID:       aghosh367
+Account:       coc
+Job name:      paa-slice
+Resources:     cpu=8,gres/gpu:a100=1,mem=64G,node=1
+Rsrc Used:     cput=00:31:12,vmem=0,walltime=00:03:54,mem=12459360K,energy_used=0
+Partition:     ice-gpu
+QOS:           coc-ice
+Nodes:         atl1-1-03-007-35-0
+---------------------------------------

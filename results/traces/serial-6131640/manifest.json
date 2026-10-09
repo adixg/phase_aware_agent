@@ -1,0 +1,51 @@
+{
+  "run_id": "serial-6131640",
+  "mode": "serial",
+  "started_at": 1791578114.8047655,
+  "host": "atl1-1-03-007-35-0.pace.gatech.edu",
+  "git_commit": "e0bc5d4",
+  "llm": "vllm",
+  "model": "meta-llama/Llama-3.1-8B-Instruct",
+  "args": {
+    "data_dir": null,
+    "seed": 0,
+    "limit": 3,
+    "llm": "vllm",
+    "base_url": "http://localhost:8000/v1",
+    "model": null,
+    "max_tokens": 256,
+    "retriever": "embedding",
+    "embedding_model": "BAAI/bge-small-en-v1.5",
+    "run_id": "serial-6131640",
+    "out_dir": "/tmp"
+  },
+  "num_tasks": 3,
+  "corpus_docs": 251,
+  "jobs": [
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_98",
+      "success": false,
+      "correct": false,
+      "answer": null,
+      "wall_s": 5.92
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_124",
+      "success": true,
+      "correct": false,
+      "answer": "29 March 1964",
+      "wall_s": 2.278
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_inference_62",
+      "success": false,
+      "correct": false,
+      "answer": null,
+      "wall_s": 8.814
+    }
+  ],
+  "finished_at": 1791578131.836094,
+  "num_succeeded": 1,
+  "num_correct": 0,
+  "num_errors": 0
+}
