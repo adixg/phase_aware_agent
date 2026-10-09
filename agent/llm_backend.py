@@ -94,6 +94,10 @@ Rules:
 - As soon as the Observations contain the facts you need, use finish.
 - Answer exactly what the question asks. Before you finish, re-read the question:
   if it asks for a date, a place or a person, give that, not an intermediate fact.
+- For a "which ..." question that compares options, answer with the name of the
+  option that wins, not the numbers or values you compared.
+- The finish answer must be the answer itself, never a search query or a
+  description of what you were looking for.
 
 Example:
 Question: Who was the father of the director of Jaws?
