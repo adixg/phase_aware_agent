@@ -61,33 +61,58 @@ class MockLLM(LLMBackend):
         return text
 
 
-REACT_SYSTEM_PROMPT = """\
+TOOL_DOCS = {
+    "retrieve": "retrieve[query]: search a collection of Wikipedia passages; returns the best-matching passages, numbered.",
+    "calculator": "calculator[expression]: evaluate arithmetic with + - * / and parentheses.",
+    "finish": "finish[answer]: give the final answer and stop. Answer with a short entity, date, or number.",
+}
+
+
+def react_system_prompt(tools: tuple[str, ...] = ("retrieve", "calculator", "finish")) -> str:
+    """ReAct instructions offering only `tools` (keys of TOOL_DOCS). Drop tools a
+    workload never needs: a model offered a calculator it has no use for tends to
+    call it in a loop instead of answering."""
+    tool_lines = "\n".join(f"- {TOOL_DOCS[t]}" for t in tools)
+    return f"""\
 Answer the question by reasoning step by step and using tools.
 Each turn, write exactly one Thought line and one Action line, then stop:
 Thought: <your reasoning>
 Action: <tool>[<input>]
 
 Tools:
-- retrieve[query]: search a collection of Wikipedia passages; returns the best-matching passage.
-- calculator[expression]: evaluate arithmetic with + - * / and parentheses.
-- finish[answer]: give the final answer and stop. Answer with a short entity, date, or number.
+{tool_lines}
 
 After each Action you will see an Observation with the tool's result. Stop right after
 the Action line: never write the tool's result, a guess at it, or a second Action
-yourself. Most questions need several facts: retrieve one fact at a time, with a
-short, specific query. If a search does not return what you need, rephrase it with
-different words; never repeat a query you have already made.
+yourself.
+
+Rules:
+- Most questions need several facts: retrieve one fact at a time, with a short,
+  specific query. Use the question's own wording for the fact you need.
+- If a search does not return what you need, rephrase it with different words.
+  Never repeat an Action you have already taken.
+- As soon as the Observations contain the facts you need, use finish.
+- Answer exactly what the question asks. Before you finish, re-read the question:
+  if it asks for a date, a place or a person, give that, not an intermediate fact.
 
 Example:
 Question: Who was the father of the director of Jaws?
 Thought: I need to find who directed Jaws.
 Action: retrieve[Jaws film director]
-Observation: Jaws is a 1975 American thriller film directed by Steven Spielberg.
+Observation: [1] Jaws is a 1975 American thriller film directed by Steven Spielberg.
 Thought: Jaws was directed by Steven Spielberg. Now I need his father.
 Action: retrieve[Steven Spielberg father]
-Observation: Spielberg was born in Cincinnati to Arnold Spielberg, an electrical engineer.
-Thought: Steven Spielberg's father is Arnold Spielberg.
+Observation: [1] Spielberg was born in Cincinnati to Arnold Spielberg, an electrical engineer.
+Thought: The question asks for the father of the director, Steven Spielberg: Arnold Spielberg.
 Action: finish[Arnold Spielberg]"""
+
+
+REACT_SYSTEM_PROMPT = react_system_prompt()
+
+# Appended to the prompt of a job's last allowed step, so the job ends with a
+# best-effort answer instead of being cut off mid-search.
+LAST_STEP_NOTE = ("This is your last step. Use finish now, with your best answer from the "
+                  "Observations so far.")
 
 
 class VLLMBackend(LLMBackend):
@@ -107,6 +132,7 @@ class VLLMBackend(LLMBackend):
         temperature: float = 0.0,
         timeout_s: float = 600.0,
         system_prompt: str = REACT_SYSTEM_PROMPT,
+        chat_template_kwargs: dict | None = None,
     ):
         self.model = model
         self.base_url = base_url.rstrip("/")
@@ -114,6 +140,8 @@ class VLLMBackend(LLMBackend):
         self.temperature = temperature
         self.timeout_s = timeout_s
         self.system_prompt = system_prompt
+        # e.g. {"enable_thinking": False} for Qwen3, so it answers without a <think> block
+        self.chat_template_kwargs = chat_template_kwargs
 
     @staticmethod
     def served_model(base_url: str = "http://localhost:8000/v1") -> str:
@@ -132,6 +160,8 @@ class VLLMBackend(LLMBackend):
             "temperature": self.temperature,
             "stop": ["Observation:"],
         }
+        if self.chat_template_kwargs:
+            body["chat_template_kwargs"] = self.chat_template_kwargs
         req = urllib.request.Request(
             f"{self.base_url}/chat/completions",
             data=json.dumps(body).encode(),

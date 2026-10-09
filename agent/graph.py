@@ -13,7 +13,7 @@ from typing import Optional, TypedDict
 from langgraph.graph import END, StateGraph
 
 from agent.common import _ACTION_RE, AgentResult, _safe_eval
-from agent.llm_backend import Generation, LLMBackend
+from agent.llm_backend import LAST_STEP_NOTE, Generation, LLMBackend
 from agent.retriever import LocalRetriever
 from serving.instrumentation.phases import Phase
 from serving.instrumentation.tracer import Tracer
@@ -37,10 +37,11 @@ class LangGraphReActAgent:
     The loop also ends once `max_steps` generations have run.
     """
 
-    def __init__(self, llm: LLMBackend, retriever: LocalRetriever, *, max_steps: int = 8):
+    def __init__(self, llm: LLMBackend, retriever: LocalRetriever, *, max_steps: int = 8, top_k: int = 3):
         self.llm = llm
         self.retriever = retriever
         self.max_steps = max_steps
+        self.top_k = top_k   # passages per retrieve; one bad top hit derails multi-hop questions
 
     def run(self, job_id: str, question: str, tracer: Tracer) -> AgentResult:
         graph = self._build(tracer)
@@ -68,7 +69,12 @@ class LangGraphReActAgent:
         def generate(state: AgentState) -> dict:
             step = state["step"]
             prompt = "\n".join(state["transcript"])
+            last_step = step == self.max_steps - 1
+            if last_step:  # prompt-only: the note never enters the transcript
+                prompt += "\n" + LAST_STEP_NOTE
             with tracer.phase(Phase.LLM_GENERATE, step=step) as meta:
+                if last_step:
+                    meta["last_step_note"] = True
                 out = self.llm.generate(prompt, step)
                 if isinstance(out, Generation):
                     text = out.text
@@ -102,10 +108,11 @@ class LangGraphReActAgent:
         def retrieve(state: AgentState) -> dict:
             step, arg = state["step"], state["arg"]
             with tracer.phase(Phase.RETRIEVE, step=step, query=arg) as meta:
-                hits = self.retriever.retrieve(arg, top_k=1)
+                hits = self.retriever.retrieve(arg, top_k=self.top_k)
                 meta["top_doc"] = hits[0].doc_id if hits else None
                 meta["score"] = hits[0].score if hits else 0.0
-            observation = hits[0].text if hits else "No results found."
+                meta["doc_ids"] = [h.doc_id for h in hits]
+            observation = "\n".join(f"[{i}] {h.text}" for i, h in enumerate(hits, 1)) if hits else "No results found."
             return _observe(state, observation)
 
         def calculator(state: AgentState) -> dict:

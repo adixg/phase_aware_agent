@@ -3,7 +3,7 @@
 import pytest
 
 from agent.graph import LangGraphReActAgent
-from agent.llm_backend import DEFAULT_SCRIPT, MockLLM
+from agent.llm_backend import DEFAULT_SCRIPT, LAST_STEP_NOTE, MockLLM
 from agent.retriever import LocalRetriever
 from agent.workloads import Document
 from serving.instrumentation.tracer import Tracer
@@ -37,7 +37,7 @@ def test_default_script_trace_shape():
     assert result.success
     assert result.answer == "The population of Paris, doubled, is approximately 4.2 million."
     assert sorted(spans[0].meta) == ["output_text", "output_tokens", "prompt_tokens", "step"]
-    assert sorted(spans[1].meta) == ["query", "score", "step", "top_doc"]
+    assert sorted(spans[1].meta) == ["doc_ids", "query", "score", "step", "top_doc"]
     assert sorted(spans[5].meta) == ["expr", "result", "step", "tool"]
 
 
@@ -77,3 +77,31 @@ def test_max_steps_caps_the_loop():
     result, spans = _run(NEVER_FINISHES, max_steps=3)
     assert [s.phase for s in spans] == [LLM, RET] * 3
     assert not result.success and result.answer is None
+
+
+def test_retrieve_returns_numbered_top_k_passages():
+    llm = MockLLM(["Thought: look.\nAction: retrieve[Paris]", "Thought: done.\nAction: finish[ok]"],
+                  tokens_per_second=1e9, jitter_s=(0.0, 0.0))
+    agent = LangGraphReActAgent(llm, LocalRetriever.from_documents(DOCS), top_k=2)
+    tracer = Tracer("job")
+    result = agent.run("job", QUESTION, tracer)
+    observation = result.transcript[2]
+    assert observation.startswith("Observation: [1] ") and "\n[2] " in observation
+    assert len(tracer.spans[1].meta["doc_ids"]) == 2
+
+
+def test_last_step_gets_the_finish_note_in_its_prompt_only():
+    prompts = []
+
+    class Recording(MockLLM):
+        def generate(self, prompt, step):
+            prompts.append(prompt)
+            return super().generate(prompt, step)
+
+    llm = Recording(NEVER_FINISHES, tokens_per_second=1e9, jitter_s=(0.0, 0.0))
+    agent = LangGraphReActAgent(llm, LocalRetriever.from_documents(DOCS), max_steps=3)
+    tracer = Tracer("job")
+    result = agent.run("job", QUESTION, tracer)
+    assert [LAST_STEP_NOTE in p for p in prompts] == [False, False, True]
+    assert not any(LAST_STEP_NOTE in line for line in result.transcript)
+    assert [s.meta.get("last_step_note") for s in tracer.spans if s.phase == LLM] == [None, None, True]

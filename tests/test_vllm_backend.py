@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import pytest
 
 from agent.graph import LangGraphReActAgent
-from agent.llm_backend import REACT_SYSTEM_PROMPT, VLLMBackend
+from agent.llm_backend import REACT_SYSTEM_PROMPT, VLLMBackend, react_system_prompt
 from agent.retriever import LocalRetriever
 from agent.workloads import Document
 from serving.instrumentation.tracer import Tracer
@@ -76,4 +76,15 @@ def test_trace_uses_server_usage(server):
     assert first["model"] == "stub-model"
     assert first["messages"][0] == {"role": "system", "content": REACT_SYSTEM_PROMPT}
     assert first["stop"] == ["Observation:"]
-    assert second["messages"][1]["content"].endswith("Observation: Paris. Paris is the capital of France.")
+    assert second["messages"][1]["content"].endswith("Observation: [1] Paris. Paris is the capital of France.")
+
+
+def test_tool_list_and_chat_template_kwargs(server):
+    base_url, requests = server
+    prompt = react_system_prompt(("retrieve", "finish"))
+    assert "calculator" not in prompt and "retrieve[query]" in prompt
+    backend = VLLMBackend("stub-model", base_url=base_url, system_prompt=prompt,
+                          chat_template_kwargs={"enable_thinking": False})
+    backend.generate("Question: q", 0)
+    assert requests[0]["messages"][0]["content"] == prompt
+    assert requests[0]["chat_template_kwargs"] == {"enable_thinking": False}

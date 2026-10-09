@@ -24,7 +24,7 @@ import time
 import traceback
 from pathlib import Path
 
-from agent.llm_backend import MockLLM, VLLMBackend
+from agent.llm_backend import MockLLM, VLLMBackend, react_system_prompt
 from agent.retriever import DEFAULT_MODEL, EmbeddingRetriever, LocalRetriever, SentenceTransformerEmbedder
 from agent.run_one import mock_script, run_one
 from agent.workloads import get_workload, pool_documents
@@ -48,6 +48,8 @@ def main() -> None:
     p.add_argument("--base-url", default="http://localhost:8000/v1")
     p.add_argument("--model", default=None, help="default: whatever the server is serving")
     p.add_argument("--max-tokens", type=int, default=256)
+    p.add_argument("--no-thinking", action="store_true",
+                   help="turn off a hybrid model's <think> block (Qwen3: enable_thinking=False)")
     p.add_argument("--retriever", choices=["bow", "embedding"], default="bow")
     p.add_argument("--embedding-model", default=DEFAULT_MODEL)
     p.add_argument("--run-id", default=None, help="default: serial-<timestamp>")
@@ -70,7 +72,11 @@ def main() -> None:
     model = None
     if args.llm == "vllm":
         model = args.model or VLLMBackend.served_model(args.base_url)
-        backend = VLLMBackend(model, base_url=args.base_url, max_tokens=args.max_tokens)
+        # AgenticRAGTracer questions are lookups and comparisons: no calculator,
+        # which the model otherwise calls in loops instead of answering.
+        backend = VLLMBackend(model, base_url=args.base_url, max_tokens=args.max_tokens,
+                              system_prompt=react_system_prompt(("retrieve", "finish")),
+                              chat_template_kwargs={"enable_thinking": False} if args.no_thinking else None)
 
     run_id = args.run_id or time.strftime("serial-%Y%m%d-%H%M%S")
     run_dir = Path(args.out_dir) / run_id
