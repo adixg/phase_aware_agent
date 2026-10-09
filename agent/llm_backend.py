@@ -72,9 +72,11 @@ Tools:
 - calculator[expression]: evaluate arithmetic with + - * / and parentheses.
 - finish[answer]: give the final answer and stop. Answer with a short entity, date, or number.
 
-After each Action you will see an Observation with the tool's result. Do not write the
-Observation yourself. Most questions need several facts: retrieve one fact at a time,
-with a short, specific query.
+After each Action you will see an Observation with the tool's result. Stop right after
+the Action line: never write the tool's result, a guess at it, or a second Action
+yourself. Most questions need several facts: retrieve one fact at a time, with a
+short, specific query. If a search does not return what you need, rephrase it with
+different words; never repeat a query you have already made.
 
 Example:
 Question: Who was the father of the director of Jaws?

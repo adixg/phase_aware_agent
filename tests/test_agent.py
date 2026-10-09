@@ -63,6 +63,16 @@ def test_bad_calculator_input_is_reported_not_raised():
     assert result.success
 
 
+def test_text_after_first_action_stays_out_of_transcript():
+    rambling = ("Thought: look it up.\nAction: retrieve[capital of France]\n\n"
+                "The capital is Lyon.\nAction: finish[Lyon]")
+    result, spans = _run([rambling, "Thought: done.\nAction: finish[Paris]"])
+    assert result.answer == "Paris"
+    assert "Thought: look it up.\nAction: retrieve[capital of France]" in result.transcript
+    assert not any("Lyon" in line for line in result.transcript)
+    assert spans[0].meta["output_text"] == rambling
+
+
 def test_max_steps_caps_the_loop():
     result, spans = _run(NEVER_FINISHES, max_steps=3)
     assert [s.phase for s in spans] == [LLM, RET] * 3

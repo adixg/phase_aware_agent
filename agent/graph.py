@@ -86,7 +86,12 @@ class LangGraphReActAgent:
             match = _ACTION_RE.search(text)
             tool = match.group(1).lower() if match else None
             arg = match.group(2).strip() if match else None
-            return {"transcript": state["transcript"] + [text], "tool": tool, "arg": arg}
+            # Models often keep going after the Action and invent its result (or a
+            # second Action); carrying that forward makes later steps treat the
+            # invention as fact. Only the turn up to the first Action enters the
+            # transcript; meta.output_text keeps the raw output.
+            turn = text[: match.end()] if match else text
+            return {"transcript": state["transcript"] + [turn], "tool": tool, "arg": arg}
 
         def parse_error(state: AgentState) -> dict:
             return {"transcript": state["transcript"] + ["Observation: could not parse an action; stopping."]}
