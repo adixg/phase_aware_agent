@@ -5,6 +5,8 @@
 #   LIMIT=100 sbatch scripts/run_slice.sbatch         # whole slice
 #   MODEL=/path/to/model/dir sbatch scripts/run_slice.sbatch
 #   sbatch scripts/run_slice.sbatch --retriever embedding   # extra args go to run_slice.py
+#   sbatch -C A100-40GB scripts/run_slice.sbatch             # one GPU type only (timing runs)
+#   sbatch --time=01:00:00 scripts/run_slice.sbatch         # give LIMIT=100 headroom (~12 min expected)
 #
 # Submit from the repo root. Expects the env at ~/scratch/conda-envs/paa, the
 # model already downloaded (compute nodes are offline), and the dataset at
@@ -15,10 +17,13 @@
 # run and copied to results/traces/<run_id>/ at the end.
 #SBATCH --job-name=paa-slice
 #SBATCH --partition=ice-gpu
-#SBATCH --gres=gpu:a100:1
+#SBATCH --gres=gpu:1
+# GPU: any of these (all >= 40 GB), first free wins. Timings differ by GPU type,
+# so for traces whose timings get compared, pin one: sbatch -C A100-40GB ...
+#SBATCH -C "A100-40GB|A100-80GB|L40S|A40"
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=64G
-#SBATCH --time=02:00:00
+#SBATCH --mem=32G                  # peak use so far ~12 GB (vLLM host side + retriever)
+#SBATCH --time=00:20:00            # a 20-task run takes ~5 min incl. vLLM startup; short jobs start sooner
 #SBATCH --output=logs/%x-%j.out
 
 set -euo pipefail

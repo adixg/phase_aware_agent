@@ -38,6 +38,16 @@ def git_commit() -> str | None:
         return None
 
 
+def gpu_name() -> str | None:
+    """GPU this run's server shares the node with; timings only compare within one type."""
+    try:
+        out = subprocess.run(["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+                             capture_output=True, text=True, check=True).stdout
+        return out.splitlines()[0].strip() or None
+    except (OSError, subprocess.CalledProcessError, IndexError):
+        return None
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--data-dir", default=None, help="root of fetched datasets (default: ./data)")
@@ -86,6 +96,7 @@ def main() -> None:
         "mode": "serial",
         "started_at": time.time(),
         "host": socket.gethostname(),
+        "gpu": gpu_name(),
         "git_commit": git_commit(),
         "llm": args.llm,
         "model": model,
