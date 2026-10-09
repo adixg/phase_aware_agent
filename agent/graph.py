@@ -13,7 +13,7 @@ from typing import Optional, TypedDict
 from langgraph.graph import END, StateGraph
 
 from agent.common import _ACTION_RE, AgentResult, _safe_eval
-from agent.llm_backend import LLMBackend
+from agent.llm_backend import Generation, LLMBackend
 from agent.retriever import LocalRetriever
 from serving.instrumentation.phases import Phase
 from serving.instrumentation.tracer import Tracer
@@ -69,9 +69,17 @@ class LangGraphReActAgent:
             step = state["step"]
             prompt = "\n".join(state["transcript"])
             with tracer.phase(Phase.LLM_GENERATE, step=step) as meta:
-                text = self.llm.generate(prompt, step)
-                meta["prompt_tokens"] = len(prompt.split())
-                meta["output_tokens"] = len(text.split())
+                out = self.llm.generate(prompt, step)
+                if isinstance(out, Generation):
+                    text = out.text
+                    meta["prompt_tokens"] = out.prompt_tokens
+                    meta["output_tokens"] = out.output_tokens
+                    if out.cached_tokens is not None:
+                        meta["cached_tokens"] = out.cached_tokens
+                else:  # plain-text backends (MockLLM): word-count estimates
+                    text = out
+                    meta["prompt_tokens"] = len(prompt.split())
+                    meta["output_tokens"] = len(text.split())
             match = _ACTION_RE.search(text)
             tool = match.group(1).lower() if match else None
             arg = match.group(2).strip() if match else None
