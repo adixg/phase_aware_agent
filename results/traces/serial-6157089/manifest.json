@@ -1,0 +1,188 @@
+{
+  "run_id": "serial-6157089",
+  "mode": "serial",
+  "started_at": 1791675973.3740342,
+  "host": "atl1-1-03-004-21-0.pace.gatech.edu",
+  "gpu": "NVIDIA L40S",
+  "git_commit": "0499e61",
+  "llm": "vllm",
+  "model": "Qwen/Qwen2.5-7B-Instruct",
+  "decoding": {
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "top_k": -1,
+    "repetition_penalty": 1.0,
+    "presence_penalty": 0.0,
+    "frequency_penalty": 0.0,
+    "max_tokens": 256,
+    "stop": [
+      "Observation:"
+    ]
+  },
+  "task_set": "slice",
+  "args": {
+    "data_dir": null,
+    "seed": 0,
+    "tasks": "slice",
+    "limit": 20,
+    "llm": "vllm",
+    "base_url": "http://localhost:8000/v1",
+    "model": null,
+    "max_tokens": 256,
+    "repetition_penalty": 1.0,
+    "max_steps": 10,
+    "no_thinking": false,
+    "retriever": "embedding",
+    "embedding_model": "BAAI/bge-small-en-v1.5",
+    "run_id": "serial-6157089",
+    "out_dir": "/tmp"
+  },
+  "num_tasks": 20,
+  "corpus_docs": 251,
+  "jobs": [
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_197",
+      "success": true,
+      "correct": true,
+      "answer": "York, Pennsylvania",
+      "wall_s": 2.964
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_388",
+      "success": true,
+      "correct": true,
+      "answer": "Babylon, New York",
+      "wall_s": 2.148
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_456",
+      "success": true,
+      "correct": true,
+      "answer": "Fast Five",
+      "wall_s": 1.843
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_155",
+      "success": true,
+      "correct": false,
+      "answer": "135-140",
+      "wall_s": 3.026
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_244",
+      "success": true,
+      "correct": false,
+      "answer": "Citro\u00ebn Xantia",
+      "wall_s": 1.684
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_248",
+      "success": true,
+      "correct": true,
+      "answer": "Blu-ray Disc",
+      "wall_s": 2.796
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_298",
+      "success": true,
+      "correct": false,
+      "answer": "lieutenant-colonel",
+      "wall_s": 1.644
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_386",
+      "success": true,
+      "correct": true,
+      "answer": "Radcliffe College",
+      "wall_s": 2.509
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_66",
+      "success": true,
+      "correct": true,
+      "answer": "8664",
+      "wall_s": 9.365
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_98",
+      "success": true,
+      "correct": true,
+      "answer": "Carmelo Casas",
+      "wall_s": 4.526
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_107",
+      "success": true,
+      "correct": true,
+      "answer": "V\u00e2n Phong bay",
+      "wall_s": 2.064
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_124",
+      "success": true,
+      "correct": true,
+      "answer": "29 March 1964",
+      "wall_s": 4.085
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_33",
+      "success": true,
+      "correct": true,
+      "answer": "Cliviger",
+      "wall_s": 2.414
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_38",
+      "success": true,
+      "correct": false,
+      "answer": "Alternative Distribution Alliance",
+      "wall_s": 2.715
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_49",
+      "success": true,
+      "correct": true,
+      "answer": "Annie",
+      "wall_s": 3.132
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_51",
+      "success": true,
+      "correct": true,
+      "answer": "Tsar Nicholas I of Russia",
+      "wall_s": 4.873
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_106",
+      "success": true,
+      "correct": true,
+      "answer": "Patapsco River",
+      "wall_s": 2.716
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_comparison_25",
+      "success": true,
+      "correct": false,
+      "answer": "Carson, Iowa",
+      "wall_s": 3.178
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_inference_61",
+      "success": true,
+      "correct": true,
+      "answer": "6",
+      "wall_s": 5.103
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_inference_62",
+      "success": true,
+      "correct": false,
+      "answer": "San Francisco Earthquake and Fire",
+      "wall_s": 11.565
+    }
+  ],
+  "finished_at": 1791676047.773647,
+  "num_succeeded": 20,
+  "num_correct": 14,
+  "num_errors": 0
+}
