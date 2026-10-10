@@ -134,6 +134,7 @@ class VLLMBackend(LLMBackend):
         base_url: str = "http://localhost:8000/v1",
         max_tokens: int = 256,
         temperature: float = 0.0,
+        repetition_penalty: float = 1.0,
         timeout_s: float = 600.0,
         system_prompt: str = REACT_SYSTEM_PROMPT,
         chat_template_kwargs: dict | None = None,
@@ -142,10 +143,27 @@ class VLLMBackend(LLMBackend):
         self.base_url = base_url.rstrip("/")
         self.max_tokens = max_tokens
         self.temperature = temperature
+        self.repetition_penalty = repetition_penalty
         self.timeout_s = timeout_s
         self.system_prompt = system_prompt
         # e.g. {"enable_thinking": False} for Qwen3, so it answers without a <think> block
         self.chat_template_kwargs = chat_template_kwargs
+
+    @property
+    def decoding(self) -> dict:
+        """Every sampling parameter, sent on each request so the server's (or the
+        model's generation_config.json) defaults can't change decoding unseen.
+        top_k=-1 / top_p=1.0 are vLLM's "off"; under temperature 0 they are moot."""
+        return {
+            "temperature": self.temperature,
+            "top_p": 1.0,
+            "top_k": -1,
+            "repetition_penalty": self.repetition_penalty,
+            "presence_penalty": 0.0,
+            "frequency_penalty": 0.0,
+            "max_tokens": self.max_tokens,
+            "stop": ["Observation:"],
+        }
 
     @staticmethod
     def served_model(base_url: str = "http://localhost:8000/v1") -> str:
@@ -160,9 +178,7 @@ class VLLMBackend(LLMBackend):
                 {"role": "system", "content": self.system_prompt},
                 {"role": "user", "content": prompt},
             ],
-            "max_tokens": self.max_tokens,
-            "temperature": self.temperature,
-            "stop": ["Observation:"],
+            **self.decoding,
         }
         if self.chat_template_kwargs:
             body["chat_template_kwargs"] = self.chat_template_kwargs

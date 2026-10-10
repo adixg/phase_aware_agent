@@ -76,6 +76,9 @@ def test_trace_uses_server_usage(server):
     assert first["model"] == "stub-model"
     assert first["messages"][0] == {"role": "system", "content": REACT_SYSTEM_PROMPT}
     assert first["stop"] == ["Observation:"]
+    # every sampling parameter is explicit, so server/model defaults can't leak in
+    assert {k: first[k] for k in ("temperature", "top_p", "top_k", "repetition_penalty")} == \
+        {"temperature": 0.0, "top_p": 1.0, "top_k": -1, "repetition_penalty": 1.0}
     assert second["messages"][1]["content"].endswith("Observation: [1] Paris. Paris is the capital of France.")
 
 

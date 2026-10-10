@@ -3,6 +3,7 @@
 #
 #   sbatch scripts/run_slice.sbatch                   # 20 tasks
 #   LIMIT=100 sbatch scripts/run_slice.sbatch         # whole slice
+#   LIMIT=all sbatch --time=01:30:00 scripts/run_slice.sbatch --tasks all   # whole dataset (1,305 tasks)
 #   MODEL=/path/to/model/dir sbatch scripts/run_slice.sbatch
 #   sbatch scripts/run_slice.sbatch --retriever embedding   # extra args go to run_slice.py
 #   sbatch -C A100-40GB scripts/run_slice.sbatch             # one GPU type only (timing runs)
@@ -56,6 +57,7 @@ echo "node $(hostname)  gpu $(nvidia-smi --query-gpu=name --format=csv,noheader 
 
 vllm serve "$MODEL" --served-model-name "$SERVED" --port 8000 --max-num-seqs 64 --gpu-memory-utilization 0.90 \
     --enable-prompt-tokens-details \
+    --generation-config vllm \
     > "logs/vllm-${SLURM_JOB_ID}.log" 2>&1 &
 VLLM_PID=$!
 trap 'kill $VLLM_PID 2>/dev/null || true' EXIT
@@ -67,7 +69,8 @@ for _ in $(seq 120); do                     # up to 10 min for weights + CUDA gr
 done
 curl -sf localhost:8000/health >/dev/null || { echo "vLLM not healthy after 10 min"; exit 1; }
 
-python scripts/run_slice.py --llm vllm --limit "$LIMIT" --run-id "$RUN_ID" --out-dir "${LOCAL%/*}" "$@" || STATUS=$?
+LIMIT_ARGS=(--limit "$LIMIT"); [[ "$LIMIT" == all ]] && LIMIT_ARGS=()   # LIMIT=all: every task
+python scripts/run_slice.py --llm vllm "${LIMIT_ARGS[@]}" --run-id "$RUN_ID" --out-dir "${LOCAL%/*}" "$@" || STATUS=$?
 
 cp -r "$LOCAL" results/traces/
 echo "traces: results/traces/${RUN_ID}"

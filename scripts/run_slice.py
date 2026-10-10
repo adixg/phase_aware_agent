@@ -52,12 +52,17 @@ def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--data-dir", default=None, help="root of fetched datasets (default: ./data)")
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--tasks", choices=["slice", "all"], default="slice",
+                   help="slice: the 100-task reduced slice (skewed to 3/4-hop); all: every task in the "
+                        "dataset. The retriever corpus is the pooled passages of the chosen set.")
     p.add_argument("--limit", type=int, default=None,
-                   help="run a seeded random subset of the slice (keeps the hop mix); default: all")
+                   help="run a seeded random subset of the chosen tasks (keeps the hop mix); default: all")
     p.add_argument("--llm", choices=["vllm", "mock"], default="vllm")
     p.add_argument("--base-url", default="http://localhost:8000/v1")
     p.add_argument("--model", default=None, help="default: whatever the server is serving")
     p.add_argument("--max-tokens", type=int, default=256)
+    p.add_argument("--repetition-penalty", type=float, default=1.0,
+                   help="1.0 = off. A penalty also discourages copying names/dates from passages")
     p.add_argument("--max-steps", type=int, default=10,
                    help="generations per job; 4-hop questions need >= 5 even when every search hits")
     p.add_argument("--no-thinking", action="store_true",
@@ -69,13 +74,13 @@ def main() -> None:
     args = p.parse_args()
 
     workload = get_workload("agentic_rag_tracer", args.data_dir)
-    slice_tasks = workload.reduced_slice(seed=args.seed)
-    tasks = slice_tasks
+    pool = workload.reduced_slice(seed=args.seed) if args.tasks == "slice" else list(workload.tasks())
+    tasks = pool
     if args.limit is not None and args.limit < len(tasks):
         picked = {t.task_id for t in random.Random(args.seed).sample(tasks, args.limit)}
         tasks = [t for t in tasks if t.task_id in picked]
 
-    docs = pool_documents(slice_tasks)
+    docs = pool_documents(pool)
     if args.retriever == "embedding":
         retriever = EmbeddingRetriever.from_documents(docs, SentenceTransformerEmbedder(args.embedding_model))
     else:
@@ -87,6 +92,7 @@ def main() -> None:
         # AgenticRAGTracer questions are lookups and comparisons: no calculator,
         # which the model otherwise calls in loops instead of answering.
         backend = VLLMBackend(model, base_url=args.base_url, max_tokens=args.max_tokens,
+                              repetition_penalty=args.repetition_penalty,
                               system_prompt=react_system_prompt(("retrieve", "finish")),
                               chat_template_kwargs={"enable_thinking": False} if args.no_thinking else None)
 
@@ -102,6 +108,8 @@ def main() -> None:
         "git_commit": git_commit(),
         "llm": args.llm,
         "model": model,
+        "decoding": backend.decoding if args.llm == "vllm" else None,
+        "task_set": args.tasks,
         "args": vars(args),
         "num_tasks": len(tasks),
         "corpus_docs": len(docs),
