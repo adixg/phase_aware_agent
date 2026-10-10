@@ -1,0 +1,46 @@
+---------------------------------------
+Begin Slurm Prolog: Oct-10-2026 19:53:55
+Job ID:    6157412
+User ID:   aghosh367
+Account:   coc
+Job name:  paa-slice
+Partition: ice-gpu
+QOS:       coc-ice
+---------------------------------------
+node atl1-1-03-004-27-0.pace.gatech.edu  gpu NVIDIA L40S  model Qwen/Qwen2.5-7B-Instruct (/home/hice1/aghosh367/scratch/hf_cache/hub/models--Qwen--Qwen2.5-7B-Instruct/snapshots/a09a35458c702b33eeacc393d103063234e8bc28/)
+Loading weights:   0%|          | 0/199 [00:00<?, ?it/s]Loading weights: 100%|██████████| 199/199 [00:00<00:00, 5633.02it/s]
+run serial-6157412: 20 tasks, 251 passages, llm=vllm model=Qwen/Qwen2.5-7B-Instruct -> /tmp/serial-6157412
+[1/20] agentic_rag_tracer_2hop_comparison_197 3.0s success=True correct=True
+[2/20] agentic_rag_tracer_2hop_comparison_388 2.3s success=True correct=True
+[3/20] agentic_rag_tracer_2hop_comparison_456 1.8s success=True correct=True
+[4/20] agentic_rag_tracer_2hop_inference_155 3.0s success=True correct=False
+[5/20] agentic_rag_tracer_2hop_inference_244 1.7s success=True correct=False
+[6/20] agentic_rag_tracer_2hop_inference_248 2.7s success=True correct=True
+[7/20] agentic_rag_tracer_2hop_inference_298 1.7s success=True correct=False
+[8/20] agentic_rag_tracer_2hop_inference_386 2.6s success=True correct=True
+[9/20] agentic_rag_tracer_3hop_comparison_66 4.2s success=True correct=False
+[10/20] agentic_rag_tracer_3hop_comparison_98 2.2s success=True correct=False
+[11/20] agentic_rag_tracer_3hop_comparison_107 2.2s success=True correct=False
+[12/20] agentic_rag_tracer_3hop_comparison_124 3.3s success=True correct=True
+[13/20] agentic_rag_tracer_3hop_inference_33 2.4s success=True correct=True
+[14/20] agentic_rag_tracer_3hop_inference_38 3.8s success=True correct=True
+[15/20] agentic_rag_tracer_3hop_inference_49 3.2s success=True correct=True
+[16/20] agentic_rag_tracer_3hop_inference_51 5.0s success=True correct=True
+[17/20] agentic_rag_tracer_3hop_inference_106 1.8s success=True correct=False
+[18/20] agentic_rag_tracer_4hop_comparison_25 5.6s success=True correct=False
+[19/20] agentic_rag_tracer_4hop_inference_61 4.4s success=True correct=True
+[20/20] agentic_rag_tracer_4hop_inference_62 4.1s success=True correct=False
+done: 20/20 finished, 11 correct, 0 errors
+traces: results/traces/serial-6157412
+---------------------------------------
+Begin Slurm Epilog: Oct-10-2026 19:56:46
+Job ID:        6157412
+User ID:       aghosh367
+Account:       coc
+Job name:      paa-slice
+Resources:     cpu=8,gres/gpu:l40s=1,mem=32G,node=1
+Rsrc Used:     cput=00:22:48,vmem=0,walltime=00:02:51,mem=10993568K,energy_used=0
+Partition:     ice-gpu
+QOS:           coc-ice
+Nodes:         atl1-1-03-004-27-0
+---------------------------------------
