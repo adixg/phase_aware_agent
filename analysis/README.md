@@ -3,6 +3,19 @@
 Install with `pip install -e '.[test,analysis]'`. Run synthetic checks with
 `python -m pytest tests/test_analysis.py`.
 
+Save JSON and Markdown reports for an individual real run with:
+
+```sh
+python -m analysis.summarize_run results/traces/serial-6157079
+python -m analysis.summarize_run results/traces/serial-6157083
+```
+
+Each invocation loads only that directory's JSONL files and checks job IDs against
+its manifest. Reports go to `results/analysis` (override with `--output-dir`). JSON
+includes raw duration samples, summary statistics, KS results, transition counts
+and probabilities, per-job outside-LLM fractions, and both overlap bases. Zero
+overlap pairs are represented by a count; all positive pairs retain intervals.
+
 ```python
 from pathlib import Path
 from analysis import (load_traces, phase_durations, pairwise_ks,
