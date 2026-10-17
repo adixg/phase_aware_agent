@@ -1,0 +1,23 @@
+---------------------------------------
+Begin Slurm Prolog: Oct-17-2026 12:13:16
+Job ID:    6321449
+User ID:   aghosh367
+Account:   coc
+Job name:  paa-slice
+Partition: ice-gpu
+QOS:       coc-ice
+---------------------------------------
+node atl1-1-03-004-27-0.pace.gatech.edu  gpu NVIDIA L40S  model Qwen/Qwen2.5-7B-Instruct (/home/hice1/aghosh367/scratch/hf_cache/hub/models--Qwen--Qwen2.5-7B-Instruct/snapshots/a09a35458c702b33eeacc393d103063234e8bc28/)
+[2026-10-17T12:14:01.226] error: *** JOB 6321449 ON atl1-1-03-004-27-0 CANCELLED AT 2026-10-17T12:14:01 DUE to SIGNAL Terminated ***
+---------------------------------------
+Begin Slurm Epilog: Oct-17-2026 12:14:03
+Job ID:        6321449
+User ID:       aghosh367
+Account:       coc
+Job name:      paa-slice
+Resources:     cpu=8,gres/gpu:l40s=1,mem=32G,node=1
+Rsrc Used:     cput=00:06:00,vmem=0,walltime=00:00:45,mem=269228K,energy_used=0
+Partition:     ice-gpu
+QOS:           coc-ice
+Nodes:         atl1-1-03-004-27-0
+---------------------------------------
