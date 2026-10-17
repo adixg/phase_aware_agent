@@ -7,6 +7,8 @@
 #   MODEL=/path/to/model/dir sbatch scripts/run_slice.sbatch
 #   sbatch scripts/run_slice.sbatch --retriever embedding   # extra args go to run_slice.py
 #   sbatch scripts/run_slice.sbatch --concurrency 8 --retrieve-delay lognormal:0.3,0.8
+#   VLLM_ARGS="--num-gpu-blocks-override 1500" sbatch ...  # extra vllm serve flags (here: a small KV cache)
+#   VLLM_BATCH_INVARIANT=1 sbatch ...        # VLLM_* env vars reach vllm serve; recorded in the manifest
 #   sbatch -C A100-40GB scripts/run_slice.sbatch             # one GPU type only (timing runs)
 #   sbatch --time=01:00:00 scripts/run_slice.sbatch         # give LIMIT=100 headroom (~12 min expected)
 #
@@ -61,10 +63,13 @@ echo "node $(hostname)  gpu $(nvidia-smi --query-gpu=name --format=csv,noheader 
 # port, and check below that the server answering is this job's own.
 PORT=$(python -c 'import socket; s = socket.socket(); s.bind(("", 0)); print(s.getsockname()[1])')
 VLOG="logs/vllm-${SLURM_JOB_ID}.log"
-vllm serve "$MODEL" --served-model-name "$SERVED" --port "$PORT" --max-num-seqs 64 --gpu-memory-utilization 0.90 \
-    --enable-prompt-tokens-details \
-    --generation-config vllm \
-    > "$VLOG" 2>&1 &
+read -ra EXTRA_VLLM_ARGS <<< "${VLLM_ARGS:-}"
+SERVE=(vllm serve "$MODEL" --served-model-name "$SERVED" --port "$PORT" --max-num-seqs 64
+       --gpu-memory-utilization 0.90 --enable-prompt-tokens-details --generation-config vllm
+       "${EXTRA_VLLM_ARGS[@]}")
+export PAA_VLLM_CMD="${SERVE[*]}" PAA_VLLM_ARGS="${VLLM_ARGS:-}"   # recorded by run_slice.py
+echo "${SERVE[*]}"
+"${SERVE[@]}" > "$VLOG" 2>&1 &
 VLLM_PID=$!
 trap 'kill $VLLM_PID 2>/dev/null || true' EXIT
 

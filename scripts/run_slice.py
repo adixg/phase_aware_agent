@@ -13,7 +13,12 @@ server dies) is logged in the manifest and the run continues.
 --concurrency N keeps N jobs in flight (closed loop: a worker starts the next
 task as soon as its job ends), so the server batches whichever jobs are in an
 LLM call. With --llm vllm, the server's /metrics are sampled to
-vllm_metrics.jsonl alongside the traces.
+server/vllm_metrics.jsonl (a subfolder, so trace loaders that glob *.jsonl
+see only job traces).
+
+Server settings the script can't see (vllm serve flags, VLLM_* env vars such as
+VLLM_BATCH_INVARIANT) are read from the environment the sbatch script sets up
+(PAA_VLLM_ARGS) and recorded in the manifest and the run name.
 
 Until the Tracer grows `run_id` / `arrival_ts`, the run directory is what
 groups jobs that ran together.
@@ -22,6 +27,7 @@ groups jobs that ran together.
 from __future__ import annotations
 
 import argparse
+import os
 import json
 import random
 import socket
@@ -82,6 +88,18 @@ def run_label(args, model: str | None, num_tasks: int) -> str:
     parts = [name, f"{args.tasks}{num_tasks}", f"c{args.concurrency}", delay, retriever]
     if args.repetition_penalty != 1.0:
         parts.append(f"rp{args.repetition_penalty:g}")
+    # extra `vllm serve` flags: "--num-gpu-blocks-override 1500 --enforce-eager"
+    # -> num-gpu-blocks-override1500_enforce-eager
+    takes_value = False
+    for token in os.environ.get("PAA_VLLM_ARGS", "").split():
+        if token.startswith("--"):
+            parts.append(token[2:])
+            takes_value = True
+        elif takes_value:
+            parts[-1] += token
+            takes_value = False
+    if os.environ.get("VLLM_BATCH_INVARIANT") == "1":
+        parts.append("batchinv")
     return "_".join(parts)
 
 
@@ -171,6 +189,9 @@ def main() -> None:
         "task_set": args.tasks,
         "retrieve_delay": args.retrieve_delay,
         "embedding_device": embedding_device,
+        # what the sbatch script launched the server with, plus any VLLM_* env overrides
+        "vllm_serve_cmd": os.environ.get("PAA_VLLM_CMD"),
+        "vllm_env": {k: v for k, v in sorted(os.environ.items()) if k.startswith("VLLM_")},
         "args": vars(args),
         "num_tasks": len(tasks),
         "corpus_docs": len(docs),
@@ -188,7 +209,8 @@ def main() -> None:
 
     poller = None
     if args.llm == "vllm" and args.metrics_interval > 0:
-        poller = MetricsPoller(args.base_url, run_dir / "vllm_metrics.jsonl",
+        (run_dir / "server").mkdir(exist_ok=True)
+        poller = MetricsPoller(args.base_url, run_dir / "server" / "vllm_metrics.jsonl",
                                interval_s=args.metrics_interval).start()
 
     def run_job(task) -> None:
