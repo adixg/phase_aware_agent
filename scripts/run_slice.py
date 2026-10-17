@@ -13,7 +13,10 @@ server dies) is logged in the manifest and the run continues.
 --concurrency N keeps N jobs in flight (closed loop: a worker starts the next
 task as soon as its job ends), so the server batches whichever jobs are in an
 LLM call. --retrieve-workers K caps retrieves running at once at K (a pool of
-K search workers): the rest wait, traced as WAIT spans. With --llm vllm, the server's /metrics are sampled to
+K search workers): the rest wait, traced as WAIT spans; --llm-slots M does the
+same for LLM calls, queueing them client side. vLLM streams its replies, so
+each LLM span also splits into ttft_s (queued inside vLLM + prefill) and
+decode_s. With --llm vllm, the server's /metrics are sampled to
 server/vllm_metrics.jsonl (a subfolder, so trace loaders that glob *.jsonl
 see only job traces).
 
@@ -89,6 +92,8 @@ def run_label(args, model: str | None, num_tasks: int) -> str:
     parts = [name, f"{args.tasks}{num_tasks}", f"c{args.concurrency}", delay, retriever]
     if args.retrieve_workers:
         parts.insert(4, f"w{args.retrieve_workers}")
+    if args.llm_slots:
+        parts.insert(4, f"llm{args.llm_slots}")
     if args.repetition_penalty != 1.0:
         parts.append(f"rp{args.repetition_penalty:g}")
     if os.environ.get("PAA_MAX_NUM_SEQS", "64") != "64":   # vLLM's per-step cap, if not the default
@@ -138,6 +143,10 @@ def main() -> None:
     p.add_argument("--retrieve-workers", type=int, default=0, metavar="K",
                    help="retrieves that can run at once (search + delay hold a worker); "
                         "0 = unlimited. Fewer than --concurrency makes jobs queue for retrieval")
+    p.add_argument("--llm-slots", type=int, default=0, metavar="M",
+                   help="LLM calls in flight at once, queued in this client (FCFS); 0 = unlimited")
+    p.add_argument("--no-stream", action="store_true",
+                   help="plain (non-streamed) vLLM replies: no ttft_s/decode_s in the traces")
     p.add_argument("--metrics-interval", type=float, default=0.5,
                    help="seconds between vLLM /metrics samples; 0 turns sampling off")
     p.add_argument("--run-id", default=None,
@@ -148,8 +157,8 @@ def main() -> None:
     args = p.parse_args()
     if args.concurrency < 1:
         p.error("--concurrency must be >= 1")
-    if args.retrieve_workers < 0:
-        p.error("--retrieve-workers must be >= 0")
+    if args.retrieve_workers < 0 or args.llm_slots < 0:
+        p.error("--retrieve-workers and --llm-slots must be >= 0")
     try:
         delay_sampler = parse_delay(args.retrieve_delay) if args.retrieve_delay else None
     except ValueError as e:
@@ -179,7 +188,8 @@ def main() -> None:
         backend = VLLMBackend(model, base_url=args.base_url, max_tokens=args.max_tokens,
                               repetition_penalty=args.repetition_penalty,
                               system_prompt=react_system_prompt(("retrieve", "finish")),
-                              chat_template_kwargs={"enable_thinking": False} if args.no_thinking else None)
+                              chat_template_kwargs={"enable_thinking": False} if args.no_thinking else None,
+                              stream=not args.no_stream)
 
     mode = "serial" if args.concurrency == 1 else "concurrent"
     run_id = args.run_id or f"{args.run_prefix or time.strftime('%Y%m%d-%H%M%S')}_{run_label(args, model, len(tasks))}"
@@ -199,6 +209,7 @@ def main() -> None:
         "task_set": args.tasks,
         "retrieve_delay": args.retrieve_delay,
         "retrieve_workers": args.retrieve_workers or None,
+        "llm_slots": args.llm_slots or None,
         "embedding_device": embedding_device,
         # what the sbatch script launched the server with, plus any VLLM_* env overrides
         "vllm_serve_cmd": os.environ.get("PAA_VLLM_CMD"),
@@ -211,6 +222,7 @@ def main() -> None:
     manifest_path = run_dir / "manifest.json"
     lock = threading.Lock()   # guards manifest + progress counter across job threads
     slots = threading.BoundedSemaphore(args.retrieve_workers) if args.retrieve_workers else None
+    llm_slots = threading.BoundedSemaphore(args.llm_slots) if args.llm_slots else None
 
     def save_manifest() -> None:
         manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
@@ -218,7 +230,7 @@ def main() -> None:
     save_manifest()
     print(f"run {run_id}: {len(tasks)} tasks, {len(docs)} passages, llm={args.llm} model={model} "
           f"concurrency={args.concurrency} retrieve_delay={args.retrieve_delay} "
-          f"retrieve_workers={args.retrieve_workers or 'unlimited'} -> {run_dir}")
+          f"retrieve_workers={args.retrieve_workers or 'unlimited'} llm_slots={args.llm_slots or 'unlimited'} -> {run_dir}")
 
     poller = None
     if args.llm == "vllm" and args.metrics_interval > 0:
@@ -234,7 +246,7 @@ def main() -> None:
         try:
             res = run_one(task, run_dir / f"{job_id}.jsonl", workload=workload, job_id=job_id,
                           llm=llm, retriever=retriever, max_steps=args.max_steps, retrieve_delay=delay,
-                          retrieve_slots=slots)
+                          retrieve_slots=slots, llm_slots=llm_slots)
             entry = {k: res[k] for k in ("job_id", "success", "correct", "answer")}
         except Exception as e:
             entry = {"job_id": job_id, "error": f"{type(e).__name__}: {e}"}

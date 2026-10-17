@@ -130,3 +130,13 @@ def test_retrieve_workers_cap_overlapping_retrieves(tmp_path):
     assert all(b[0] >= a[1] for a, b in zip(rets, rets[1:]))   # one worker: retrieves never overlap
     assert len(waits) == len(rets) and all(w["meta"]["resource"] == "retrieve_slot" for w in waits)
     assert max(w["duration_s"] for w in waits) > 0.1           # 3 jobs on 1 worker: someone queued
+
+
+def test_llm_slots_cap_overlapping_generations(tmp_path):
+    manifest, traces = _run_slice(tmp_path, "--concurrency", "3", "--llm-slots", "1")
+    assert manifest["llm_slots"] == 1 and manifest["num_errors"] == 0
+    spans = [r for rows in traces.values() for r in rows[:-1]]
+    gens = sorted((r["start_ts"], r["end_ts"]) for r in spans if r["phase"] == "llm_generate")
+    waits = [r for r in spans if r["phase"] == "wait"]
+    assert all(b[0] >= a[1] for a, b in zip(gens, gens[1:]))   # one slot: generations never overlap
+    assert len(waits) == len(gens) and {w["meta"]["resource"] for w in waits} == {"llm_slot"}

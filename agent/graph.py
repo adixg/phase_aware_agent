@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 import threading
 import time
-from contextlib import nullcontext
+from contextlib import contextmanager
 from typing import Callable, Optional, TypedDict
 
 from langgraph.graph import END, StateGraph
@@ -39,17 +39,19 @@ def _norm_query(q: str) -> str:
     return " ".join(re.sub(r"[^\w\s]", " ", q.lower()).split())
 
 
-class _Release:
-    """Context manager that only releases an already-acquired semaphore on exit."""
-
-    def __init__(self, sem: threading.Semaphore):
-        self.sem = sem
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc):
-        self.sem.release()
+@contextmanager
+def _slot(tracer: Tracer, slots: threading.Semaphore | None, resource: str, step: int):
+    """Hold one of a shared pool's slots for the block. Time spent waiting for it is a
+    WAIT span (meta.resource says which pool), so queueing stays apart from service time."""
+    if slots is None:
+        yield
+        return
+    with tracer.phase(Phase.WAIT, step=step, resource=resource):
+        slots.acquire()
+    try:
+        yield
+    finally:
+        slots.release()
 
 
 class LangGraphReActAgent:
@@ -64,16 +66,18 @@ class LangGraphReActAgent:
 
     def __init__(self, llm: LLMBackend, retriever: LocalRetriever, *, max_steps: int = 8, top_k: int = 3,
                  retrieve_delay: Callable[[int], float] | None = None,
-                 retrieve_slots: threading.Semaphore | None = None):
+                 retrieve_slots: threading.Semaphore | None = None,
+                 llm_slots: threading.Semaphore | None = None):
         self.llm = llm
         self.retriever = retriever
         self.max_steps = max_steps
         self.top_k = top_k   # passages per retrieve; one bad top hit derails multi-hop questions
         # step -> seconds of emulated backend latency added inside each RETRIEVE span (agent.delay)
         self.retrieve_delay = retrieve_delay
-        # Shared across jobs: K retrieval workers. A job holds a slot for its search plus
-        # injected delay; time spent waiting for one is a WAIT span before the RETRIEVE span.
+        # Pools shared across jobs (see _slot): K retrieval workers, held for the search plus
+        # injected delay, and M LLM slots, held for one generation. None = unlimited.
         self.retrieve_slots = retrieve_slots
+        self.llm_slots = llm_slots
 
     def run(self, job_id: str, question: str, tracer: Tracer) -> AgentResult:
         graph = self._build(tracer)
@@ -106,7 +110,8 @@ class LangGraphReActAgent:
             last_step = step == self.max_steps - 1
             if last_step:  # prompt-only: the note never enters the transcript
                 prompt += "\n" + LAST_STEP_NOTE
-            with tracer.phase(Phase.LLM_GENERATE, step=step) as meta:
+            with _slot(tracer, self.llm_slots, "llm_slot", step), \
+                    tracer.phase(Phase.LLM_GENERATE, step=step) as meta:
                 if last_step:
                     meta["last_step_note"] = True
                 out = self.llm.generate(prompt, step)
@@ -116,6 +121,9 @@ class LangGraphReActAgent:
                     meta["output_tokens"] = out.output_tokens
                     if out.cached_tokens is not None:
                         meta["cached_tokens"] = out.cached_tokens
+                    if out.ttft_s is not None:   # streamed: queue inside vLLM + prefill, then decode
+                        meta["ttft_s"] = out.ttft_s
+                        meta["decode_s"] = out.decode_s
                 else:  # plain-text backends (MockLLM): word-count estimates
                     text = out
                     meta["prompt_tokens"] = len(prompt.split())
@@ -147,11 +155,8 @@ class LangGraphReActAgent:
 
         def retrieve(state: AgentState) -> dict:
             step, arg = state["step"], state["arg"]
-            if self.retrieve_slots is not None:
-                with tracer.phase(Phase.WAIT, step=step, resource="retrieve_slot"):
-                    self.retrieve_slots.acquire()   # released when the RETRIEVE span ends
-            slot = _Release(self.retrieve_slots) if self.retrieve_slots is not None else nullcontext()
-            with slot, tracer.phase(Phase.RETRIEVE, step=step, query=arg) as meta:
+            with _slot(tracer, self.retrieve_slots, "retrieve_slot", step), \
+                    tracer.phase(Phase.RETRIEVE, step=step, query=arg) as meta:
                 t0 = time.perf_counter()
                 hits = self.retriever.retrieve(arg, top_k=self.top_k)
                 meta["search_s"] = time.perf_counter() - t0

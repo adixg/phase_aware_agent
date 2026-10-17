@@ -1,8 +1,9 @@
 """VLLMBackend against a stub OpenAI-compatible server: request shape, and real
-usage numbers (not word counts) landing in the trace."""
+usage numbers (not word counts) landing in the trace, streamed or not."""
 
 import json
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
@@ -40,11 +41,25 @@ def server():
             req = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
             requests.append(req)
             n = len(requests)
-            self._reply({
-                "choices": [{"message": {"content": TURNS[n - 1]}}],
-                "usage": {"prompt_tokens": 100 * n, "completion_tokens": 7 * n,
-                          "prompt_tokens_details": {"cached_tokens": 50 * (n - 1)}},
-            })
+            usage = {"prompt_tokens": 100 * n, "completion_tokens": 7 * n,
+                     "prompt_tokens_details": {"cached_tokens": 50 * (n - 1)}}
+            if not req.get("stream"):
+                self._reply({"choices": [{"message": {"content": TURNS[n - 1]}}], "usage": usage})
+                return
+            # vLLM's shape: a role-only delta, content deltas, then a choices-less usage chunk
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.end_headers()
+            time.sleep(0.1)   # "queued + prefill" before the first token
+            text = TURNS[n - 1]
+            chunks = [{"choices": [{"delta": {"role": "assistant"}}]}]
+            chunks += [{"choices": [{"delta": {"content": text[i:i + 10]}}]} for i in range(0, len(text), 10)]
+            chunks.append({"choices": [], "usage": usage})
+            for c in chunks:
+                self.wfile.write(f"data: {json.dumps(c)}\n\n".encode())
+                self.wfile.flush()
+                time.sleep(0.01)
+            self.wfile.write(b"data: [DONE]\n\n")
 
         def log_message(self, *args):
             pass
@@ -60,9 +75,11 @@ def test_served_model(server):
     assert VLLMBackend.served_model(base_url) == "stub-model"
 
 
-def test_trace_uses_server_usage(server):
+@pytest.mark.parametrize("stream", [True, False])
+def test_trace_uses_server_usage(server, stream):
     base_url, requests = server
-    agent = LangGraphReActAgent(VLLMBackend("stub-model", base_url=base_url), LocalRetriever.from_documents(DOCS))
+    agent = LangGraphReActAgent(VLLMBackend("stub-model", base_url=base_url, stream=stream),
+                                LocalRetriever.from_documents(DOCS))
     tracer = Tracer("job")
     result = agent.run("job", "What is the capital of France?", tracer)
 
@@ -71,11 +88,18 @@ def test_trace_uses_server_usage(server):
     assert [s.meta["prompt_tokens"] for s in llm_spans] == [100, 200]
     assert [s.meta["output_tokens"] for s in llm_spans] == [7, 14]
     assert [s.meta["cached_tokens"] for s in llm_spans] == [0, 50]
+    if stream:
+        assert all(s.meta["ttft_s"] >= 0.1 and s.meta["decode_s"] > 0 for s in llm_spans)
+        # span: time.time(), backend: perf_counter(); allow for the clocks disagreeing slightly
+        assert all(s.meta["ttft_s"] + s.meta["decode_s"] <= s.duration_s + 1e-3 for s in llm_spans)
+    else:
+        assert all("ttft_s" not in s.meta for s in llm_spans)
 
     first, second = requests
     assert first["model"] == "stub-model"
     assert first["messages"][0] == {"role": "system", "content": REACT_SYSTEM_PROMPT}
     assert first["stop"] == ["Observation:"]
+    assert first.get("stream", False) is stream
     # every sampling parameter is explicit, so server/model defaults can't leak in
     assert {k: first[k] for k in ("temperature", "top_p", "top_k", "repetition_penalty")} == \
         {"temperature": 0.0, "top_p": 1.0, "top_k": -1, "repetition_penalty": 1.0}

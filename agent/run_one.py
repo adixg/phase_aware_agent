@@ -50,15 +50,18 @@ def run_one(
     max_steps: int = 8,
     retrieve_delay=None,
     retrieve_slots=None,
+    llm_slots=None,
 ) -> dict:
     """`retriever` is shared across jobs when given (the 50-100 job runs build it once over
     the slice corpus); by default each job gets a private one over its own passages.
     `retrieve_delay` (step -> seconds, see agent.delay) emulates a slower search backend;
-    `retrieve_slots` (a semaphore shared across jobs) caps how many retrieves run at once."""
+    `retrieve_slots` / `llm_slots` (semaphores shared across jobs) cap how many retrieves /
+    LLM calls run at once; waits for a slot are traced as WAIT spans."""
     job_id = job_id or task.task_id
     retriever = retriever or LocalRetriever.from_documents(pool_documents([task]))
     agent = LangGraphReActAgent(llm or MockLLM(mock_script(task)), retriever, max_steps=max_steps,
-                                retrieve_delay=retrieve_delay, retrieve_slots=retrieve_slots)
+                                retrieve_delay=retrieve_delay,
+                                retrieve_slots=retrieve_slots, llm_slots=llm_slots)
 
     tracer = Tracer(job_id)
     result = agent.run(job_id, task.question, tracer)

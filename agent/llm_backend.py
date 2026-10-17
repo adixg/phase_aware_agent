@@ -28,6 +28,10 @@ class Generation:
     prompt_tokens: int
     output_tokens: int
     cached_tokens: int | None = None   # prefix-cache hits, when the server reports them
+    # Streamed requests only, measured client side: request sent -> first token (time
+    # queued inside the server + prefill), and first token -> last (decode).
+    ttft_s: float | None = None
+    decode_s: float | None = None
 
 
 class LLMBackend(ABC):
@@ -138,6 +142,7 @@ class VLLMBackend(LLMBackend):
         timeout_s: float = 600.0,
         system_prompt: str = REACT_SYSTEM_PROMPT,
         chat_template_kwargs: dict | None = None,
+        stream: bool = True,
     ):
         self.model = model
         self.base_url = base_url.rstrip("/")
@@ -148,6 +153,9 @@ class VLLMBackend(LLMBackend):
         self.system_prompt = system_prompt
         # e.g. {"enable_thinking": False} for Qwen3, so it answers without a <think> block
         self.chat_template_kwargs = chat_template_kwargs
+        # Streaming changes no tokens; it lets each call's time be split into
+        # server-side queueing + prefill (ttft_s) and decode (decode_s).
+        self.stream = stream
 
     @property
     def decoding(self) -> dict:
@@ -182,20 +190,46 @@ class VLLMBackend(LLMBackend):
         }
         if self.chat_template_kwargs:
             body["chat_template_kwargs"] = self.chat_template_kwargs
+        if self.stream:
+            body["stream"] = True
+            body["stream_options"] = {"include_usage": True}   # final chunk carries the usage
         req = urllib.request.Request(
             f"{self.base_url}/chat/completions",
             data=json.dumps(body).encode(),
             headers={"Content-Type": "application/json"},
         )
+        ttft_s = decode_s = None
+        t0 = time.perf_counter()
         with urllib.request.urlopen(req, timeout=self.timeout_s) as r:
-            out = json.load(r)
-        usage = out.get("usage") or {}
+            if self.stream:
+                pieces, usage, t_first = [], {}, None
+                for raw in r:   # server-sent events: "data: {json}" lines, then "data: [DONE]"
+                    line = raw.decode().strip()
+                    if not line.startswith("data:") or line == "data: [DONE]":
+                        continue
+                    chunk = json.loads(line[5:])
+                    usage = chunk.get("usage") or usage
+                    for choice in chunk.get("choices") or []:
+                        piece = (choice.get("delta") or {}).get("content")
+                        if piece:
+                            if t_first is None:
+                                t_first = time.perf_counter()
+                            pieces.append(piece)
+                text = "".join(pieces)
+                if t_first is not None:
+                    ttft_s, decode_s = t_first - t0, time.perf_counter() - t_first
+            else:
+                out = json.load(r)
+                usage = out.get("usage") or {}
+                text = out["choices"][0]["message"]["content"] or ""
         details = usage.get("prompt_tokens_details") or {}
         return Generation(
-            text=(out["choices"][0]["message"]["content"] or "").strip(),
+            text=text.strip(),
             prompt_tokens=usage.get("prompt_tokens", 0),
             output_tokens=usage.get("completion_tokens", 0),
             cached_tokens=details.get("cached_tokens"),
+            ttft_s=ttft_s,
+            decode_s=decode_s,
         )
 
 
