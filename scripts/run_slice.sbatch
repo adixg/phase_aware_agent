@@ -6,6 +6,7 @@
 #   LIMIT=all sbatch --time=01:30:00 scripts/run_slice.sbatch --tasks all   # whole dataset (1,305 tasks)
 #   MODEL=/path/to/model/dir sbatch scripts/run_slice.sbatch
 #   sbatch scripts/run_slice.sbatch --retriever embedding   # extra args go to run_slice.py
+#   sbatch scripts/run_slice.sbatch --concurrency 8 --retrieve-delay lognormal:0.3,0.8
 #   sbatch -C A100-40GB scripts/run_slice.sbatch             # one GPU type only (timing runs)
 #   sbatch --time=01:00:00 scripts/run_slice.sbatch         # give LIMIT=100 headroom (~12 min expected)
 #
@@ -15,7 +16,8 @@
 # snapshot directory in $HF_HOME (default ~/scratch/hf_cache). A directory is
 # loaded as-is: offline loading by repo name refuses snapshots that skip
 # optional repo files (LICENSE, original/, ...). Traces are written to node-local disk during the
-# run and copied to results/traces/<run_id>/ at the end.
+# run and copied to results/traces/run-<jobid>/ at the end (the manifest's
+# "mode" says serial or concurrent).
 #SBATCH --job-name=paa-slice
 #SBATCH --partition=ice-gpu
 #SBATCH --gres=gpu:1
@@ -31,7 +33,7 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 LIMIT="${LIMIT:-20}"
-RUN_ID="serial-${SLURM_JOB_ID}"
+RUN_ID="run-${SLURM_JOB_ID}"
 LOCAL="${TMPDIR:-/tmp}/${RUN_ID}"
 mkdir -p "$LOCAL" logs results/traces
 

@@ -9,7 +9,8 @@ the graph nodes, so the trace schema is unchanged by the migration.
 from __future__ import annotations
 
 import re
-from typing import Optional, TypedDict
+import time
+from typing import Callable, Optional, TypedDict
 
 from langgraph.graph import END, StateGraph
 
@@ -46,11 +47,14 @@ class LangGraphReActAgent:
     The loop also ends once `max_steps` generations have run.
     """
 
-    def __init__(self, llm: LLMBackend, retriever: LocalRetriever, *, max_steps: int = 8, top_k: int = 3):
+    def __init__(self, llm: LLMBackend, retriever: LocalRetriever, *, max_steps: int = 8, top_k: int = 3,
+                 retrieve_delay: Callable[[int], float] | None = None):
         self.llm = llm
         self.retriever = retriever
         self.max_steps = max_steps
         self.top_k = top_k   # passages per retrieve; one bad top hit derails multi-hop questions
+        # step -> seconds of emulated backend latency added inside each RETRIEVE span (agent.delay)
+        self.retrieve_delay = retrieve_delay
 
     def run(self, job_id: str, question: str, tracer: Tracer) -> AgentResult:
         graph = self._build(tracer)
@@ -125,7 +129,13 @@ class LangGraphReActAgent:
         def retrieve(state: AgentState) -> dict:
             step, arg = state["step"], state["arg"]
             with tracer.phase(Phase.RETRIEVE, step=step, query=arg) as meta:
+                t0 = time.perf_counter()
                 hits = self.retriever.retrieve(arg, top_k=self.top_k)
+                meta["search_s"] = time.perf_counter() - t0
+                if self.retrieve_delay is not None:
+                    delay = self.retrieve_delay(step)
+                    time.sleep(delay)
+                    meta["injected_delay_s"] = delay
                 meta["top_doc"] = hits[0].doc_id if hits else None
                 meta["score"] = hits[0].score if hits else 0.0
                 meta["doc_ids"] = [h.doc_id for h in hits]

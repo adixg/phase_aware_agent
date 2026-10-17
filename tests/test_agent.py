@@ -37,7 +37,7 @@ def test_default_script_trace_shape():
     assert result.success
     assert result.answer == "The population of Paris, doubled, is approximately 4.2 million."
     assert sorted(spans[0].meta) == ["output_text", "output_tokens", "prompt_tokens", "step"]
-    assert sorted(spans[1].meta) == ["doc_ids", "query", "score", "step", "top_doc"]
+    assert sorted(spans[1].meta) == ["doc_ids", "query", "score", "search_s", "step", "top_doc"]
     assert sorted(spans[5].meta) == ["expr", "result", "step", "tool"]
 
 
@@ -118,3 +118,15 @@ def test_last_step_gets_the_finish_note_in_its_prompt_only():
     assert [LAST_STEP_NOTE in p for p in prompts] == [False, False, True]
     assert not any(LAST_STEP_NOTE in line for line in result.transcript)
     assert [s.meta.get("last_step_note") for s in tracer.spans if s.phase == LLM] == [None, None, True]
+
+
+def test_retrieve_delay_is_inside_the_span_and_recorded_apart():
+    llm = MockLLM(DEFAULT_SCRIPT, tokens_per_second=1e9, jitter_s=(0.0, 0.0))
+    agent = LangGraphReActAgent(llm, LocalRetriever.from_documents(DOCS), retrieve_delay=lambda step: 0.05 * (step + 1))
+    tracer = Tracer("job")
+    agent.run("job", QUESTION, tracer)
+    rets = [s for s in tracer.spans if s.phase == RET]
+    assert [s.meta["injected_delay_s"] for s in rets] == [0.05, 0.1]   # agent steps 0 and 1
+    for s in rets:
+        assert s.duration_s >= s.meta["injected_delay_s"]
+        assert s.meta["search_s"] < s.duration_s
