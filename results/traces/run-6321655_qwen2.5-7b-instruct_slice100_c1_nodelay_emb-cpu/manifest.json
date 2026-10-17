@@ -1,0 +1,960 @@
+{
+  "run_id": "run-6321655_qwen2.5-7b-instruct_slice100_c1_nodelay_emb-cpu",
+  "mode": "serial",
+  "concurrency": 1,
+  "started_at": 1792255616.4739783,
+  "host": "atl1-1-03-004-21-0.pace.gatech.edu",
+  "gpu": "NVIDIA L40S",
+  "git_commit": "263800a",
+  "llm": "vllm",
+  "model": "Qwen/Qwen2.5-7B-Instruct",
+  "decoding": {
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "top_k": -1,
+    "repetition_penalty": 1.0,
+    "presence_penalty": 0.0,
+    "frequency_penalty": 0.0,
+    "max_tokens": 256,
+    "stop": [
+      "Observation:"
+    ]
+  },
+  "task_set": "slice",
+  "retrieve_delay": null,
+  "embedding_device": "cpu",
+  "args": {
+    "data_dir": null,
+    "seed": 0,
+    "tasks": "slice",
+    "limit": 100,
+    "llm": "vllm",
+    "base_url": "http://localhost:60305/v1",
+    "model": null,
+    "max_tokens": 256,
+    "repetition_penalty": 1.0,
+    "max_steps": 10,
+    "no_thinking": false,
+    "retriever": "embedding",
+    "embedding_model": "BAAI/bge-small-en-v1.5",
+    "embedding_device": "cpu",
+    "concurrency": 1,
+    "retrieve_delay": null,
+    "metrics_interval": 0.5,
+    "run_id": null,
+    "run_prefix": "run-6321655",
+    "out_dir": "/tmp/paa-6321655"
+  },
+  "num_tasks": 100,
+  "corpus_docs": 251,
+  "jobs": [
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_20",
+      "success": true,
+      "correct": false,
+      "answer": "USA Station Hospital Number Three",
+      "start_ts": 1792255616.5103652,
+      "end_ts": 1792255619.048161,
+      "wall_s": 2.538
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_111",
+      "success": true,
+      "correct": true,
+      "answer": "Medisch Spectrum Twente",
+      "start_ts": 1792255619.0483944,
+      "end_ts": 1792255622.1993353,
+      "wall_s": 3.151
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_132",
+      "success": true,
+      "correct": true,
+      "answer": "Gotham",
+      "start_ts": 1792255622.1995695,
+      "end_ts": 1792255624.4231298,
+      "wall_s": 2.224
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_155",
+      "success": true,
+      "correct": true,
+      "answer": "South Louisiana Correctional Facility",
+      "start_ts": 1792255624.4233763,
+      "end_ts": 1792255627.2125828,
+      "wall_s": 2.789
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_183",
+      "success": true,
+      "correct": true,
+      "answer": "York, Pennsylvania",
+      "start_ts": 1792255627.2128644,
+      "end_ts": 1792255630.4839349,
+      "wall_s": 3.271
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_197",
+      "success": true,
+      "correct": true,
+      "answer": "York, Pennsylvania",
+      "start_ts": 1792255630.4841971,
+      "end_ts": 1792255632.9239855,
+      "wall_s": 2.44
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_207",
+      "success": true,
+      "correct": false,
+      "answer": "$29,500",
+      "start_ts": 1792255632.924265,
+      "end_ts": 1792255635.7874181,
+      "wall_s": 2.863
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_215",
+      "success": true,
+      "correct": true,
+      "answer": "Ceres, California",
+      "start_ts": 1792255635.7877347,
+      "end_ts": 1792255638.5793138,
+      "wall_s": 2.792
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_244",
+      "success": true,
+      "correct": true,
+      "answer": "Yonhap",
+      "start_ts": 1792255638.5795827,
+      "end_ts": 1792255640.8819656,
+      "wall_s": 2.302
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_248",
+      "success": true,
+      "correct": false,
+      "answer": "Rickey Watts had fewer receiving yards than Jeff Janis",
+      "start_ts": 1792255640.8822646,
+      "end_ts": 1792255644.3691778,
+      "wall_s": 3.487
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_261",
+      "success": true,
+      "correct": true,
+      "answer": "Vila Real de Santo Ant\u00f3nio",
+      "start_ts": 1792255644.3694634,
+      "end_ts": 1792255647.4031131,
+      "wall_s": 3.034
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_298",
+      "success": false,
+      "correct": false,
+      "answer": null,
+      "start_ts": 1792255647.4034216,
+      "end_ts": 1792255659.3317318,
+      "wall_s": 11.928
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_388",
+      "success": true,
+      "correct": true,
+      "answer": "Babylon, New York",
+      "start_ts": 1792255659.3327632,
+      "end_ts": 1792255661.498117,
+      "wall_s": 2.165
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_401",
+      "success": true,
+      "correct": true,
+      "answer": "Parishville, New York",
+      "start_ts": 1792255661.4984512,
+      "end_ts": 1792255664.51049,
+      "wall_s": 3.012
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_424",
+      "success": true,
+      "correct": true,
+      "answer": "Shorewood",
+      "start_ts": 1792255664.510839,
+      "end_ts": 1792255666.3770316,
+      "wall_s": 1.866
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_432",
+      "success": true,
+      "correct": true,
+      "answer": "San Jose, California",
+      "start_ts": 1792255666.3773682,
+      "end_ts": 1792255669.666333,
+      "wall_s": 3.289
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_455",
+      "success": true,
+      "correct": false,
+      "answer": "Dayton, Iowa",
+      "start_ts": 1792255669.666702,
+      "end_ts": 1792255671.7197058,
+      "wall_s": 2.053
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_456",
+      "success": true,
+      "correct": true,
+      "answer": "Fast Five",
+      "start_ts": 1792255671.7200685,
+      "end_ts": 1792255673.5625935,
+      "wall_s": 1.843
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_464",
+      "success": true,
+      "correct": true,
+      "answer": "Harry Connick Jr.",
+      "start_ts": 1792255673.5630012,
+      "end_ts": 1792255675.6266685,
+      "wall_s": 2.064
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_470",
+      "success": true,
+      "correct": true,
+      "answer": "Ted Stevens Anchorage International Airport",
+      "start_ts": 1792255675.6270626,
+      "end_ts": 1792255678.0555758,
+      "wall_s": 2.429
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_20",
+      "success": true,
+      "correct": true,
+      "answer": "Colt McCoy",
+      "start_ts": 1792255678.055948,
+      "end_ts": 1792255679.955164,
+      "wall_s": 1.899
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_48",
+      "success": true,
+      "correct": true,
+      "answer": "2018 ICC World Cricket League Division Four tournament",
+      "start_ts": 1792255679.9555707,
+      "end_ts": 1792255683.4917727,
+      "wall_s": 3.536
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_71",
+      "success": true,
+      "correct": true,
+      "answer": "Stupava",
+      "start_ts": 1792255683.4921656,
+      "end_ts": 1792255685.6293876,
+      "wall_s": 2.137
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_111",
+      "success": true,
+      "correct": false,
+      "answer": "new gymnasium annex",
+      "start_ts": 1792255685.6298034,
+      "end_ts": 1792255688.9691546,
+      "wall_s": 3.339
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_128",
+      "success": true,
+      "correct": false,
+      "answer": "University of Tulsa",
+      "start_ts": 1792255688.9696023,
+      "end_ts": 1792255690.446015,
+      "wall_s": 1.476
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_132",
+      "success": true,
+      "correct": true,
+      "answer": "Universidad de Barcelona",
+      "start_ts": 1792255690.4464717,
+      "end_ts": 1792255693.181089,
+      "wall_s": 2.735
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_144",
+      "success": true,
+      "correct": true,
+      "answer": "forward",
+      "start_ts": 1792255693.1815536,
+      "end_ts": 1792255695.3683574,
+      "wall_s": 2.187
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_155",
+      "success": true,
+      "correct": false,
+      "answer": "135-140",
+      "start_ts": 1792255695.3688264,
+      "end_ts": 1792255698.2072868,
+      "wall_s": 2.838
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_183",
+      "success": true,
+      "correct": false,
+      "answer": "600 degrees Celsius",
+      "start_ts": 1792255698.2077692,
+      "end_ts": 1792255701.834901,
+      "wall_s": 3.627
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_197",
+      "success": true,
+      "correct": true,
+      "answer": "Ladera Heights",
+      "start_ts": 1792255701.8353732,
+      "end_ts": 1792255704.0847883,
+      "wall_s": 2.249
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_207",
+      "success": true,
+      "correct": false,
+      "answer": "Y Not Festival",
+      "start_ts": 1792255704.0852644,
+      "end_ts": 1792255706.4914608,
+      "wall_s": 2.406
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_215",
+      "success": true,
+      "correct": true,
+      "answer": "no",
+      "start_ts": 1792255706.4919436,
+      "end_ts": 1792255709.4681334,
+      "wall_s": 2.976
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_244",
+      "success": true,
+      "correct": false,
+      "answer": "Citro\u00ebn Xantia",
+      "start_ts": 1792255709.4686174,
+      "end_ts": 1792255711.1518624,
+      "wall_s": 1.683
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_248",
+      "success": true,
+      "correct": true,
+      "answer": "Blu-ray Disc",
+      "start_ts": 1792255711.152371,
+      "end_ts": 1792255713.9455395,
+      "wall_s": 2.793
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_258",
+      "success": true,
+      "correct": true,
+      "answer": "September 8, 1941",
+      "start_ts": 1792255713.9461808,
+      "end_ts": 1792255716.630127,
+      "wall_s": 2.684
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_261",
+      "success": true,
+      "correct": true,
+      "answer": "19",
+      "start_ts": 1792255716.6306202,
+      "end_ts": 1792255718.676415,
+      "wall_s": 2.046
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_298",
+      "success": true,
+      "correct": false,
+      "answer": "lieutenant-colonel",
+      "start_ts": 1792255718.6770148,
+      "end_ts": 1792255720.3208454,
+      "wall_s": 1.644
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_316",
+      "success": true,
+      "correct": false,
+      "answer": "Tsar Nicholas II",
+      "start_ts": 1792255720.3213673,
+      "end_ts": 1792255722.6889284,
+      "wall_s": 2.368
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_386",
+      "success": true,
+      "correct": true,
+      "answer": "Radcliffe College",
+      "start_ts": 1792255722.6894863,
+      "end_ts": 1792255725.1981835,
+      "wall_s": 2.509
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_388",
+      "success": true,
+      "correct": true,
+      "answer": "University of Wisconsin",
+      "start_ts": 1792255725.1987903,
+      "end_ts": 1792255726.896435,
+      "wall_s": 1.698
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_10",
+      "success": true,
+      "correct": false,
+      "answer": "Sheba Medical Center",
+      "start_ts": 1792255726.8969738,
+      "end_ts": 1792255728.6993105,
+      "wall_s": 1.802
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_24",
+      "success": true,
+      "correct": false,
+      "answer": "291500",
+      "start_ts": 1792255728.699921,
+      "end_ts": 1792255731.159908,
+      "wall_s": 2.46
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_35",
+      "success": true,
+      "correct": false,
+      "answer": "Babylon, New York",
+      "start_ts": 1792255731.1604877,
+      "end_ts": 1792255737.2057924,
+      "wall_s": 6.045
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_55",
+      "success": true,
+      "correct": false,
+      "answer": "Oldham County",
+      "start_ts": 1792255737.2063572,
+      "end_ts": 1792255740.0539026,
+      "wall_s": 2.848
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_64",
+      "success": true,
+      "correct": false,
+      "answer": "26.07 million",
+      "start_ts": 1792255740.0544808,
+      "end_ts": 1792255748.744381,
+      "wall_s": 8.69
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_66",
+      "success": true,
+      "correct": true,
+      "answer": "8664",
+      "start_ts": 1792255748.7449796,
+      "end_ts": 1792255758.1113324,
+      "wall_s": 9.366
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_72",
+      "success": true,
+      "correct": false,
+      "answer": "HD 195564",
+      "start_ts": 1792255758.111942,
+      "end_ts": 1792255760.5916016,
+      "wall_s": 2.48
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_77",
+      "success": true,
+      "correct": false,
+      "answer": "7",
+      "start_ts": 1792255760.5922186,
+      "end_ts": 1792255764.2402396,
+      "wall_s": 3.648
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_91",
+      "success": true,
+      "correct": false,
+      "answer": "1334544",
+      "start_ts": 1792255764.2408724,
+      "end_ts": 1792255769.0862825,
+      "wall_s": 4.845
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_98",
+      "success": true,
+      "correct": true,
+      "answer": "Carmelo Casas",
+      "start_ts": 1792255769.0869389,
+      "end_ts": 1792255773.6097667,
+      "wall_s": 4.523
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_103",
+      "success": true,
+      "correct": true,
+      "answer": "2084",
+      "start_ts": 1792255773.610399,
+      "end_ts": 1792255776.6900065,
+      "wall_s": 3.08
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_107",
+      "success": true,
+      "correct": true,
+      "answer": "V\u00e2n Phong bay",
+      "start_ts": 1792255776.6907008,
+      "end_ts": 1792255778.7530992,
+      "wall_s": 2.062
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_122",
+      "success": true,
+      "correct": false,
+      "answer": "Ritchie Coliseum",
+      "start_ts": 1792255778.7537572,
+      "end_ts": 1792255784.7851791,
+      "wall_s": 6.031
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_124",
+      "success": true,
+      "correct": true,
+      "answer": "29 March 1964",
+      "start_ts": 1792255784.78585,
+      "end_ts": 1792255788.8699026,
+      "wall_s": 4.084
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_129",
+      "success": true,
+      "correct": false,
+      "answer": "15 March",
+      "start_ts": 1792255788.8705645,
+      "end_ts": 1792255793.1493807,
+      "wall_s": 4.279
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_130",
+      "success": true,
+      "correct": true,
+      "answer": "(34.700455, -76.740814)",
+      "start_ts": 1792255793.1500716,
+      "end_ts": 1792255797.9297981,
+      "wall_s": 4.78
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_149",
+      "success": true,
+      "correct": false,
+      "answer": "Brockway Township",
+      "start_ts": 1792255797.9304655,
+      "end_ts": 1792255806.8118122,
+      "wall_s": 8.881
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_158",
+      "success": true,
+      "correct": false,
+      "answer": "School of the Art Institute of Chicago",
+      "start_ts": 1792255806.8125486,
+      "end_ts": 1792255809.401186,
+      "wall_s": 2.589
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_5",
+      "success": true,
+      "correct": false,
+      "answer": "New York City",
+      "start_ts": 1792255809.4020336,
+      "end_ts": 1792255811.9987075,
+      "wall_s": 2.597
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_17",
+      "success": true,
+      "correct": false,
+      "answer": "Chicago Cubs",
+      "start_ts": 1792255811.9994156,
+      "end_ts": 1792255815.879667,
+      "wall_s": 3.88
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_27",
+      "success": true,
+      "correct": true,
+      "answer": "Leeds, Bradford, Wakefield",
+      "start_ts": 1792255815.8803508,
+      "end_ts": 1792255819.7868748,
+      "wall_s": 3.907
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_33",
+      "success": true,
+      "correct": true,
+      "answer": "Cliviger",
+      "start_ts": 1792255819.787577,
+      "end_ts": 1792255822.196659,
+      "wall_s": 2.409
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_38",
+      "success": true,
+      "correct": false,
+      "answer": "Alternative Distribution Alliance",
+      "start_ts": 1792255822.1974216,
+      "end_ts": 1792255824.909231,
+      "wall_s": 2.712
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_45",
+      "success": true,
+      "correct": true,
+      "answer": "4",
+      "start_ts": 1792255824.9100077,
+      "end_ts": 1792255827.6634102,
+      "wall_s": 2.753
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_49",
+      "success": true,
+      "correct": true,
+      "answer": "Annie",
+      "start_ts": 1792255827.664229,
+      "end_ts": 1792255830.795069,
+      "wall_s": 3.131
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_51",
+      "success": true,
+      "correct": true,
+      "answer": "Tsar Nicholas I of Russia",
+      "start_ts": 1792255830.7958732,
+      "end_ts": 1792255836.0558712,
+      "wall_s": 5.26
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_53",
+      "success": true,
+      "correct": false,
+      "answer": "Me. I Am Mariah... The Elusive Chanteuse",
+      "start_ts": 1792255836.056618,
+      "end_ts": 1792255839.3008559,
+      "wall_s": 3.244
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_61",
+      "success": true,
+      "correct": true,
+      "answer": "Archbishop of Canterbury",
+      "start_ts": 1792255839.3016407,
+      "end_ts": 1792255842.4110596,
+      "wall_s": 3.109
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_62",
+      "success": true,
+      "correct": true,
+      "answer": "Irving, Texas",
+      "start_ts": 1792255842.4118333,
+      "end_ts": 1792255844.9773698,
+      "wall_s": 2.566
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_64",
+      "success": true,
+      "correct": false,
+      "answer": "4",
+      "start_ts": 1792255844.9781554,
+      "end_ts": 1792255848.9741492,
+      "wall_s": 3.996
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_65",
+      "success": true,
+      "correct": true,
+      "answer": "treason",
+      "start_ts": 1792255848.9749246,
+      "end_ts": 1792255851.3858438,
+      "wall_s": 2.411
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_74",
+      "success": true,
+      "correct": true,
+      "answer": "completion of the High German consonant shift",
+      "start_ts": 1792255851.3866267,
+      "end_ts": 1792255853.8642375,
+      "wall_s": 2.478
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_97",
+      "success": true,
+      "correct": true,
+      "answer": "Rev. John Monteith",
+      "start_ts": 1792255853.865054,
+      "end_ts": 1792255857.345312,
+      "wall_s": 3.48
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_100",
+      "success": true,
+      "correct": false,
+      "answer": "Fort\u00fan Gal\u00edndez",
+      "start_ts": 1792255857.3461375,
+      "end_ts": 1792255861.1748798,
+      "wall_s": 3.829
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_106",
+      "success": true,
+      "correct": true,
+      "answer": "Patapsco River",
+      "start_ts": 1792255861.1757197,
+      "end_ts": 1792255863.888453,
+      "wall_s": 2.713
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_108",
+      "success": true,
+      "correct": true,
+      "answer": "Fabio Taglioni",
+      "start_ts": 1792255863.8893356,
+      "end_ts": 1792255867.1720455,
+      "wall_s": 3.283
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_comparison_2",
+      "success": true,
+      "correct": true,
+      "answer": "60",
+      "start_ts": 1792255867.1729105,
+      "end_ts": 1792255871.3054824,
+      "wall_s": 4.133
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_comparison_16",
+      "success": true,
+      "correct": false,
+      "answer": "Ballinger, Texas county seat",
+      "start_ts": 1792255871.3063684,
+      "end_ts": 1792255874.9518585,
+      "wall_s": 3.645
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_comparison_19",
+      "success": true,
+      "correct": true,
+      "answer": "Truax Lake",
+      "start_ts": 1792255874.9527597,
+      "end_ts": 1792255878.005399,
+      "wall_s": 3.053
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_comparison_25",
+      "success": true,
+      "correct": false,
+      "answer": "Carson, Iowa",
+      "start_ts": 1792255878.0063193,
+      "end_ts": 1792255881.1851604,
+      "wall_s": 3.179
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_comparison_26",
+      "success": true,
+      "correct": true,
+      "answer": "2.30",
+      "start_ts": 1792255881.1860409,
+      "end_ts": 1792255886.4665349,
+      "wall_s": 5.28
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_comparison_31",
+      "success": true,
+      "correct": false,
+      "answer": "Peshtigo, Wisconsin",
+      "start_ts": 1792255886.467427,
+      "end_ts": 1792255890.5620573,
+      "wall_s": 4.095
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_comparison_32",
+      "success": true,
+      "correct": true,
+      "answer": "3-13",
+      "start_ts": 1792255890.5629914,
+      "end_ts": 1792255893.782426,
+      "wall_s": 3.219
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_comparison_48",
+      "success": true,
+      "correct": false,
+      "answer": "Vienna",
+      "start_ts": 1792255893.7833464,
+      "end_ts": 1792255896.6446214,
+      "wall_s": 2.861
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_comparison_49",
+      "success": true,
+      "correct": true,
+      "answer": "1645",
+      "start_ts": 1792255896.6455865,
+      "end_ts": 1792255901.8998806,
+      "wall_s": 5.254
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_comparison_50",
+      "success": true,
+      "correct": false,
+      "answer": "Uproxx",
+      "start_ts": 1792255901.9007628,
+      "end_ts": 1792255906.7873304,
+      "wall_s": 4.887
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_comparison_53",
+      "success": false,
+      "correct": false,
+      "answer": null,
+      "start_ts": 1792255906.7882528,
+      "end_ts": 1792255917.0055652,
+      "wall_s": 10.217
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_comparison_56",
+      "success": true,
+      "correct": true,
+      "answer": "50",
+      "start_ts": 1792255917.0065532,
+      "end_ts": 1792255921.9296224,
+      "wall_s": 4.923
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_inference_5",
+      "success": true,
+      "correct": false,
+      "answer": "Fairleigh Dickinson University",
+      "start_ts": 1792255921.9305866,
+      "end_ts": 1792255925.477949,
+      "wall_s": 3.547
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_inference_27",
+      "success": true,
+      "correct": true,
+      "answer": "Liberal Arts",
+      "start_ts": 1792255925.478956,
+      "end_ts": 1792255929.0432394,
+      "wall_s": 3.564
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_inference_33",
+      "success": true,
+      "correct": false,
+      "answer": "350000",
+      "start_ts": 1792255929.044189,
+      "end_ts": 1792255932.058055,
+      "wall_s": 3.014
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_inference_38",
+      "success": true,
+      "correct": false,
+      "answer": "heavy equipment",
+      "start_ts": 1792255932.0590272,
+      "end_ts": 1792255936.4102702,
+      "wall_s": 4.351
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_inference_45",
+      "success": true,
+      "correct": false,
+      "answer": "2",
+      "start_ts": 1792255936.4112837,
+      "end_ts": 1792255943.9472642,
+      "wall_s": 7.536
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_inference_49",
+      "success": true,
+      "correct": false,
+      "answer": "Neha Dhupia",
+      "start_ts": 1792255943.9482417,
+      "end_ts": 1792255949.044164,
+      "wall_s": 5.096
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_inference_51",
+      "success": true,
+      "correct": true,
+      "answer": "12.8%",
+      "start_ts": 1792255949.0451558,
+      "end_ts": 1792255952.0742612,
+      "wall_s": 3.029
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_inference_53",
+      "success": true,
+      "correct": false,
+      "answer": "4",
+      "start_ts": 1792255952.0753195,
+      "end_ts": 1792255954.7527938,
+      "wall_s": 2.677
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_inference_61",
+      "success": true,
+      "correct": true,
+      "answer": "6",
+      "start_ts": 1792255954.753839,
+      "end_ts": 1792255959.8521204,
+      "wall_s": 5.098
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_inference_62",
+      "success": true,
+      "correct": false,
+      "answer": "San Francisco Earthquake and Fire",
+      "start_ts": 1792255959.8531747,
+      "end_ts": 1792255971.404796,
+      "wall_s": 11.552
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_inference_64",
+      "success": true,
+      "correct": false,
+      "answer": "\"The mixing of the all-holy Body and the precious Blood of Our Lord and God and Saviour Jesus Christ\"",
+      "start_ts": 1792255971.4058259,
+      "end_ts": 1792255975.3132586,
+      "wall_s": 3.907
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_inference_65",
+      "success": true,
+      "correct": false,
+      "answer": "34",
+      "start_ts": 1792255975.3143392,
+      "end_ts": 1792255980.4170678,
+      "wall_s": 5.103
+    }
+  ],
+  "metrics_samples": 728,
+  "metrics_errors": 0,
+  "finished_at": 1792255980.4182234,
+  "num_succeeded": 98,
+  "num_correct": 54,
+  "num_errors": 0,
+  "makespan_s": 363.94424510002136,
+  "jobs_per_s": 0.2747673616119892
+}
