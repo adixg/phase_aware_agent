@@ -16,8 +16,8 @@
 # snapshot directory in $HF_HOME (default ~/scratch/hf_cache). A directory is
 # loaded as-is: offline loading by repo name refuses snapshots that skip
 # optional repo files (LICENSE, original/, ...). Traces are written to node-local disk during the
-# run and copied to results/traces/run-<jobid>/ at the end (the manifest's
-# "mode" says serial or concurrent).
+# run and copied to results/traces/run-<jobid>_<settings>/ at the end, e.g.
+# run-6160001_qwen2.5-7b-instruct_slice100_c8_lognormal0.3-0.8_emb-cpu.
 #SBATCH --job-name=paa-slice
 #SBATCH --partition=ice-gpu
 #SBATCH --gres=gpu:1
@@ -33,9 +33,8 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 LIMIT="${LIMIT:-20}"
-RUN_ID="run-${SLURM_JOB_ID}"
-LOCAL="${TMPDIR:-/tmp}/${RUN_ID}"
-mkdir -p "$LOCAL" logs results/traces
+OUT="${TMPDIR:-/tmp}/paa-${SLURM_JOB_ID}"   # run_slice.py names the run folder inside it
+mkdir -p "$OUT" logs results/traces
 
 # sbatch copies the submitting shell's environment; if conda is already on PATH,
 # reloading the module only prints a spurious "conda deactivate" error.
@@ -72,8 +71,11 @@ done
 curl -sf localhost:8000/health >/dev/null || { echo "vLLM not healthy after 10 min"; exit 1; }
 
 LIMIT_ARGS=(--limit "$LIMIT"); [[ "$LIMIT" == all ]] && LIMIT_ARGS=()   # LIMIT=all: every task
-python scripts/run_slice.py --llm vllm "${LIMIT_ARGS[@]}" --run-id "$RUN_ID" --out-dir "${LOCAL%/*}" "$@" || STATUS=$?
+python scripts/run_slice.py --llm vllm "${LIMIT_ARGS[@]}" --run-prefix "run-${SLURM_JOB_ID}" --out-dir "$OUT" "$@" || STATUS=$?
 
-cp -r "$LOCAL" results/traces/
-echo "traces: results/traces/${RUN_ID}"
+for d in "$OUT"/*/; do
+    [[ -d "$d" ]] || continue   # no run folder: run_slice.py failed before starting
+    cp -r "$d" results/traces/
+    echo "traces: results/traces/$(basename "$d")"
+done
 exit "${STATUS:-0}"

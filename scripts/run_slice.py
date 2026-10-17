@@ -71,6 +71,20 @@ class LockedRetriever:
             return self.inner.retrieve(query, top_k=top_k)
 
 
+def run_label(args, model: str | None, num_tasks: int) -> str:
+    """The settings that tell runs apart, for the run folder name, e.g.
+    qwen2.5-7b-instruct_slice100_c8_lognormal0.3-0.8_emb-cpu. The manifest has the full record."""
+    name = (model or args.llm).rstrip("/").rsplit("/", 1)[-1].lower()
+    delay = args.retrieve_delay.replace(":", "").replace(",", "-") if args.retrieve_delay else "nodelay"
+    if delay[0].isdigit():
+        delay = f"delay{delay}"
+    retriever = f"emb-{args.embedding_device}" if args.retriever == "embedding" else args.retriever
+    parts = [name, f"{args.tasks}{num_tasks}", f"c{args.concurrency}", delay, retriever]
+    if args.repetition_penalty != 1.0:
+        parts.append(f"rp{args.repetition_penalty:g}")
+    return "_".join(parts)
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--data-dir", default=None, help="root of fetched datasets (default: ./data)")
@@ -100,7 +114,10 @@ def main() -> None:
                         "uniform:LOW,HIGH or lognormal:MEDIAN,SIGMA (see agent/delay.py)")
     p.add_argument("--metrics-interval", type=float, default=0.5,
                    help="seconds between vLLM /metrics samples; 0 turns sampling off")
-    p.add_argument("--run-id", default=None, help="default: <mode>-<timestamp>")
+    p.add_argument("--run-id", default=None,
+                   help="exact run folder name; default: <prefix>_<settings label> (see run_label)")
+    p.add_argument("--run-prefix", default=None, help="start of the default run folder name; "
+                   "default: a timestamp (the sbatch script passes run-<slurm job id>)")
     p.add_argument("--out-dir", default="results/traces")
     args = p.parse_args()
     if args.concurrency < 1:
@@ -137,7 +154,7 @@ def main() -> None:
                               chat_template_kwargs={"enable_thinking": False} if args.no_thinking else None)
 
     mode = "serial" if args.concurrency == 1 else "concurrent"
-    run_id = args.run_id or time.strftime(f"{mode}-%Y%m%d-%H%M%S")
+    run_id = args.run_id or f"{args.run_prefix or time.strftime('%Y%m%d-%H%M%S')}_{run_label(args, model, len(tasks))}"
     run_dir = Path(args.out_dir) / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     manifest = {
