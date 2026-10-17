@@ -7,8 +7,9 @@ to one JSONL file per run, on the same time.time() clock as the trace spans:
 
     {"ts": 1791676005.9, "metrics": {"vllm:num_requests_running": 7.0, ...}}
 
-Values are summed over label sets (engine, model). Histogram buckets are
-skipped; their _sum/_count are kept, so means between samples can be derived.
+Values are summed over label sets (engine, model). Histogram buckets and
+_created timestamps are skipped; _sum/_count are kept, so means between samples
+can be derived.
 """
 
 from __future__ import annotations
@@ -32,7 +33,7 @@ def parse_metrics(text: str, keep=KEEP) -> dict[str, float]:
         if not line.startswith("vllm:"):
             continue
         name = line.split("{", 1)[0].split(" ", 1)[0]
-        if name.endswith("_bucket") or not any(k in name for k in keep):
+        if name.endswith(("_bucket", "_created")) or not any(k in name for k in keep):
             continue
         try:
             value = float(line.rsplit(" ", 1)[1])

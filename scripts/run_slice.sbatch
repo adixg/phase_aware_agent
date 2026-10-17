@@ -56,22 +56,29 @@ fi
 
 echo "node $(hostname)  gpu $(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)  model $SERVED ($MODEL)"
 
-vllm serve "$MODEL" --served-model-name "$SERVED" --port 8000 --max-num-seqs 64 --gpu-memory-utilization 0.90 \
+# localhost is shared by every job on the node: with a fixed port, a second job's
+# health check and requests silently reach the first job's server. Take a free
+# port, and check below that the server answering is this job's own.
+PORT=$(python -c 'import socket; s = socket.socket(); s.bind(("", 0)); print(s.getsockname()[1])')
+VLOG="logs/vllm-${SLURM_JOB_ID}.log"
+vllm serve "$MODEL" --served-model-name "$SERVED" --port "$PORT" --max-num-seqs 64 --gpu-memory-utilization 0.90 \
     --enable-prompt-tokens-details \
     --generation-config vllm \
-    > "logs/vllm-${SLURM_JOB_ID}.log" 2>&1 &
+    > "$VLOG" 2>&1 &
 VLLM_PID=$!
 trap 'kill $VLLM_PID 2>/dev/null || true' EXIT
 
 for _ in $(seq 120); do                     # up to 10 min for weights + CUDA graphs
-    curl -sf localhost:8000/health >/dev/null && break
-    kill -0 $VLLM_PID 2>/dev/null || { echo "vLLM exited; see logs/vllm-${SLURM_JOB_ID}.log"; exit 1; }
+    curl -sf "localhost:$PORT/health" >/dev/null && break
+    kill -0 $VLLM_PID 2>/dev/null || { echo "vLLM exited; see $VLOG"; exit 1; }
     sleep 5
 done
-curl -sf localhost:8000/health >/dev/null || { echo "vLLM not healthy after 10 min"; exit 1; }
+curl -sf "localhost:$PORT/health" >/dev/null || { echo "vLLM not healthy after 10 min"; exit 1; }
+sleep 1; grep -q '"GET /health' "$VLOG" || { echo "port $PORT is answered by another server, not this job's vLLM"; exit 1; }
+echo "vLLM up on port $PORT"
 
 LIMIT_ARGS=(--limit "$LIMIT"); [[ "$LIMIT" == all ]] && LIMIT_ARGS=()   # LIMIT=all: every task
-python scripts/run_slice.py --llm vllm "${LIMIT_ARGS[@]}" --run-prefix "run-${SLURM_JOB_ID}" --out-dir "$OUT" "$@" || STATUS=$?
+python scripts/run_slice.py --llm vllm --base-url "http://localhost:$PORT/v1" "${LIMIT_ARGS[@]}" --run-prefix "run-${SLURM_JOB_ID}" --out-dir "$OUT" "$@" || STATUS=$?
 
 for d in "$OUT"/*/; do
     [[ -d "$d" ]] || continue   # no run folder: run_slice.py failed before starting
