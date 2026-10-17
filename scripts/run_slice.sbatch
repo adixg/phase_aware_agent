@@ -7,6 +7,8 @@
 #   MODEL=/path/to/model/dir sbatch scripts/run_slice.sbatch
 #   sbatch scripts/run_slice.sbatch --retriever embedding   # extra args go to run_slice.py
 #   sbatch scripts/run_slice.sbatch --concurrency 8 --retrieve-delay lognormal:0.3,0.8
+#   sbatch scripts/run_slice.sbatch --concurrency 32 --retrieve-delay lognormal:0.3,0.8 --retrieve-workers 4
+#   MAX_NUM_SEQS=16 sbatch ...               # vLLM runs at most 16 requests per step; the rest queue
 #   VLLM_ARGS="--num-gpu-blocks-override 1500" sbatch ...  # extra vllm serve flags (here: a small KV cache)
 #   VLLM_BATCH_INVARIANT=1 sbatch ...        # VLLM_* env vars reach vllm serve; recorded in the manifest
 #   sbatch -C A100-40GB scripts/run_slice.sbatch             # one GPU type only (timing runs)
@@ -35,6 +37,7 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 LIMIT="${LIMIT:-20}"
+MAX_NUM_SEQS="${MAX_NUM_SEQS:-64}"   # above --concurrency: nothing queues inside vLLM
 OUT="${TMPDIR:-/tmp}/paa-${SLURM_JOB_ID}"   # run_slice.py names the run folder inside it
 mkdir -p "$OUT" logs results/traces
 
@@ -64,10 +67,10 @@ echo "node $(hostname)  gpu $(nvidia-smi --query-gpu=name --format=csv,noheader 
 PORT=$(python -c 'import socket; s = socket.socket(); s.bind(("", 0)); print(s.getsockname()[1])')
 VLOG="logs/vllm-${SLURM_JOB_ID}.log"
 read -ra EXTRA_VLLM_ARGS <<< "${VLLM_ARGS:-}"
-SERVE=(vllm serve "$MODEL" --served-model-name "$SERVED" --port "$PORT" --max-num-seqs 64
+SERVE=(vllm serve "$MODEL" --served-model-name "$SERVED" --port "$PORT" --max-num-seqs "$MAX_NUM_SEQS"
        --gpu-memory-utilization 0.90 --enable-prompt-tokens-details --generation-config vllm
        "${EXTRA_VLLM_ARGS[@]}")
-export PAA_VLLM_CMD="${SERVE[*]}" PAA_VLLM_ARGS="${VLLM_ARGS:-}"   # recorded by run_slice.py
+export PAA_VLLM_CMD="${SERVE[*]}" PAA_VLLM_ARGS="${VLLM_ARGS:-}" PAA_MAX_NUM_SEQS="$MAX_NUM_SEQS"   # recorded by run_slice.py
 echo "${SERVE[*]}"
 "${SERVE[@]}" > "$VLOG" 2>&1 &
 VLLM_PID=$!

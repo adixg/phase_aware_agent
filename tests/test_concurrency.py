@@ -118,3 +118,15 @@ def test_concurrency_one_is_serial(tmp_path):
     ends = sorted((rows[-1]["start_ts"], rows[-1]["end_ts"]) for rows in traces.values())
     assert all(b[0] >= a[1] for a, b in zip(ends, ends[1:]))
     assert all("injected_delay_s" not in r["meta"] for rows in traces.values() for r in rows[:-1])
+
+
+def test_retrieve_workers_cap_overlapping_retrieves(tmp_path):
+    manifest, traces = _run_slice(tmp_path, "--concurrency", "3", "--retrieve-delay", "0.2",
+                                  "--retrieve-workers", "1")
+    assert manifest["retrieve_workers"] == 1 and manifest["num_errors"] == 0
+    spans = [r for rows in traces.values() for r in rows[:-1]]
+    rets = sorted((r["start_ts"], r["end_ts"]) for r in spans if r["phase"] == "retrieve")
+    waits = [r for r in spans if r["phase"] == "wait"]
+    assert all(b[0] >= a[1] for a, b in zip(rets, rets[1:]))   # one worker: retrieves never overlap
+    assert len(waits) == len(rets) and all(w["meta"]["resource"] == "retrieve_slot" for w in waits)
+    assert max(w["duration_s"] for w in waits) > 0.1           # 3 jobs on 1 worker: someone queued

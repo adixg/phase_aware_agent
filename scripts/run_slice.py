@@ -12,7 +12,8 @@ server dies) is logged in the manifest and the run continues.
 
 --concurrency N keeps N jobs in flight (closed loop: a worker starts the next
 task as soon as its job ends), so the server batches whichever jobs are in an
-LLM call. With --llm vllm, the server's /metrics are sampled to
+LLM call. --retrieve-workers K caps retrieves running at once at K (a pool of
+K search workers): the rest wait, traced as WAIT spans. With --llm vllm, the server's /metrics are sampled to
 server/vllm_metrics.jsonl (a subfolder, so trace loaders that glob *.jsonl
 see only job traces).
 
@@ -86,8 +87,12 @@ def run_label(args, model: str | None, num_tasks: int) -> str:
         delay = f"delay{delay}"
     retriever = f"emb-{args.embedding_device}" if args.retriever == "embedding" else args.retriever
     parts = [name, f"{args.tasks}{num_tasks}", f"c{args.concurrency}", delay, retriever]
+    if args.retrieve_workers:
+        parts.insert(4, f"w{args.retrieve_workers}")
     if args.repetition_penalty != 1.0:
         parts.append(f"rp{args.repetition_penalty:g}")
+    if os.environ.get("PAA_MAX_NUM_SEQS", "64") != "64":   # vLLM's per-step cap, if not the default
+        parts.append(f"seqs{os.environ['PAA_MAX_NUM_SEQS']}")
     # extra `vllm serve` flags: "--num-gpu-blocks-override 1500 --enforce-eager"
     # -> num-gpu-blocks-override1500_enforce-eager
     takes_value = False
@@ -130,6 +135,9 @@ def main() -> None:
     p.add_argument("--retrieve-delay", default=None, metavar="SPEC",
                    help="emulated search-backend latency added to each retrieve: SECONDS, "
                         "uniform:LOW,HIGH or lognormal:MEDIAN,SIGMA (see agent/delay.py)")
+    p.add_argument("--retrieve-workers", type=int, default=0, metavar="K",
+                   help="retrieves that can run at once (search + delay hold a worker); "
+                        "0 = unlimited. Fewer than --concurrency makes jobs queue for retrieval")
     p.add_argument("--metrics-interval", type=float, default=0.5,
                    help="seconds between vLLM /metrics samples; 0 turns sampling off")
     p.add_argument("--run-id", default=None,
@@ -140,6 +148,8 @@ def main() -> None:
     args = p.parse_args()
     if args.concurrency < 1:
         p.error("--concurrency must be >= 1")
+    if args.retrieve_workers < 0:
+        p.error("--retrieve-workers must be >= 0")
     try:
         delay_sampler = parse_delay(args.retrieve_delay) if args.retrieve_delay else None
     except ValueError as e:
@@ -188,6 +198,7 @@ def main() -> None:
         "decoding": backend.decoding if args.llm == "vllm" else None,
         "task_set": args.tasks,
         "retrieve_delay": args.retrieve_delay,
+        "retrieve_workers": args.retrieve_workers or None,
         "embedding_device": embedding_device,
         # what the sbatch script launched the server with, plus any VLLM_* env overrides
         "vllm_serve_cmd": os.environ.get("PAA_VLLM_CMD"),
@@ -199,13 +210,15 @@ def main() -> None:
     }
     manifest_path = run_dir / "manifest.json"
     lock = threading.Lock()   # guards manifest + progress counter across job threads
+    slots = threading.BoundedSemaphore(args.retrieve_workers) if args.retrieve_workers else None
 
     def save_manifest() -> None:
         manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
 
     save_manifest()
     print(f"run {run_id}: {len(tasks)} tasks, {len(docs)} passages, llm={args.llm} model={model} "
-          f"concurrency={args.concurrency} retrieve_delay={args.retrieve_delay} -> {run_dir}")
+          f"concurrency={args.concurrency} retrieve_delay={args.retrieve_delay} "
+          f"retrieve_workers={args.retrieve_workers or 'unlimited'} -> {run_dir}")
 
     poller = None
     if args.llm == "vllm" and args.metrics_interval > 0:
@@ -220,7 +233,8 @@ def main() -> None:
         t0 = time.time()
         try:
             res = run_one(task, run_dir / f"{job_id}.jsonl", workload=workload, job_id=job_id,
-                          llm=llm, retriever=retriever, max_steps=args.max_steps, retrieve_delay=delay)
+                          llm=llm, retriever=retriever, max_steps=args.max_steps, retrieve_delay=delay,
+                          retrieve_slots=slots)
             entry = {k: res[k] for k in ("job_id", "success", "correct", "answer")}
         except Exception as e:
             entry = {"job_id": job_id, "error": f"{type(e).__name__}: {e}"}
