@@ -105,9 +105,8 @@ def test_concurrent_run_overlaps_jobs_and_records_delays(tmp_path):
     assert manifest["retrieve_delay"] == "0.3" and manifest["num_errors"] == 0
     assert len(traces) == manifest["num_tasks"] == len(manifest["jobs"]) == 6
     rets = [r for rows in traces.values() for r in rows if r.get("phase") == "retrieve"]
-    delays = [r for rows in traces.values() for r in rows if r.get("phase") == "retrieve_delay"]
-    assert rets and len(delays) == len(rets)
-    assert all(r["meta"]["delay_s"] == 0.3 and r["duration_s"] >= 0.3 for r in delays)
+    assert rets and all(r["meta"]["delay_s"] == 0.3 and r["duration_s"] >= 0.3 for r in rets)
+    assert all(0 <= r["meta"]["search_s"] < r["duration_s"] - 0.3 + 1e-6 for r in rets)
     # 3 workers: job-seconds per second of run time well above 1 (serial would be <= 1)
     assert sum(j["wall_s"] for j in manifest["jobs"]) / manifest["makespan_s"] > 2
     spans = sorted((s["start_ts"], s["end_ts"]) for s in (rows[-1] for rows in traces.values()))
@@ -119,7 +118,7 @@ def test_concurrency_one_is_serial(tmp_path):
     assert manifest["mode"] == "serial" and manifest["retrieve_delay"] is None
     ends = sorted((rows[-1]["start_ts"], rows[-1]["end_ts"]) for rows in traces.values())
     assert all(b[0] >= a[1] for a, b in zip(ends, ends[1:]))
-    assert not any(r["phase"] == "retrieve_delay" for rows in traces.values() for r in rows[:-1])
+    assert all("delay_s" not in r["meta"] for rows in traces.values() for r in rows[:-1])
 
 
 def test_retrieve_workers_cap_overlapping_retrieves(tmp_path):
