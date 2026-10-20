@@ -1,0 +1,328 @@
+---------------------------------------
+Begin Slurm Prolog: Oct-20-2026 10:19:14
+Job ID:    6420496
+User ID:   aghosh367
+Account:   coc
+Job name:  paa-slice
+Partition: ice-gpu
+QOS:       coc-ice
+---------------------------------------
+node atl1-1-03-004-27-0.pace.gatech.edu  gpu NVIDIA L40S  model Qwen/Qwen2.5-7B-Instruct (/home/hice1/aghosh367/scratch/hf_cache/hub/models--Qwen--Qwen2.5-7B-Instruct/snapshots/a09a35458c702b33eeacc393d103063234e8bc28/)
+vllm serve /home/hice1/aghosh367/scratch/hf_cache/hub/models--Qwen--Qwen2.5-7B-Instruct/snapshots/a09a35458c702b33eeacc393d103063234e8bc28/ --served-model-name Qwen/Qwen2.5-7B-Instruct --port 41643 --max-num-seqs 64 --gpu-memory-utilization 0.90 --enable-prompt-tokens-details --generation-config vllm
+vLLM up on port 41643
+Loading weights:   0%|          | 0/199 [00:00<?, ?it/s]Loading weights:   2%|▏         | 4/199 [00:00<00:05, 38.58it/s]Loading weights:  20%|█▉        | 39/199 [00:00<00:00, 176.15it/s]Loading weights:  28%|██▊       | 56/199 [00:00<00:00, 163.07it/s]Loading weights:  37%|███▋      | 73/199 [00:00<00:00, 130.23it/s]Loading weights:  44%|████▍     | 88/199 [00:00<00:00, 121.11it/s]Loading weights:  59%|█████▉    | 117/199 [00:00<00:00, 154.42it/s]Loading weights:  71%|███████   | 141/199 [00:00<00:00, 163.95it/s]Loading weights:  80%|███████▉  | 159/199 [00:01<00:00, 166.43it/s]Loading weights:  88%|████████▊ | 176/199 [00:01<00:00, 162.77it/s]Loading weights: 100%|██████████| 199/199 [00:01<00:00, 169.47it/s]
+run run-6420496_qwen2.5-7b-instruct_all300_c24_lognormal1.0-0.8_llm8_w8_emb-cpu: 300 tasks, 1511 passages, llm=vllm model=Qwen/Qwen2.5-7B-Instruct concurrency=24 retrieve_delay=lognormal:1.0,0.8 retrieve_workers=8 llm_slots=8 -> /tmp/paa-6420496/run-6420496_qwen2.5-7b-instruct_all300_c24_lognormal1.0-0.8_llm8_w8_emb-cpu
+[1/300] agentic_rag_tracer_2hop_comparison_314 4.7s success=True correct=True
+[2/300] agentic_rag_tracer_2hop_inference_145 5.1s success=True correct=False
+[3/300] agentic_rag_tracer_2hop_comparison_299 5.5s success=True correct=False
+[4/300] agentic_rag_tracer_3hop_inference_44 6.2s success=True correct=False
+[5/300] agentic_rag_tracer_3hop_inference_60 6.4s success=True correct=False
+[6/300] agentic_rag_tracer_2hop_inference_230 8.1s success=True correct=True
+[7/300] agentic_rag_tracer_2hop_inference_345 8.3s success=True correct=True
+[8/300] agentic_rag_tracer_2hop_comparison_38 8.3s success=True correct=True
+[9/300] agentic_rag_tracer_2hop_comparison_239 8.6s success=True correct=True
+[10/300] agentic_rag_tracer_2hop_inference_253 9.3s success=True correct=False
+[11/300] agentic_rag_tracer_2hop_comparison_151 9.5s success=True correct=False
+[12/300] agentic_rag_tracer_3hop_comparison_25 9.7s success=True correct=False
+[13/300] agentic_rag_tracer_2hop_inference_146 3.7s success=True correct=False
+[14/300] agentic_rag_tracer_2hop_comparison_322 10.3s success=True correct=True
+[15/300] agentic_rag_tracer_2hop_comparison_30 11.4s success=True correct=True
+[16/300] agentic_rag_tracer_3hop_inference_74 11.5s success=True correct=True
+[17/300] agentic_rag_tracer_2hop_comparison_183 11.7s success=True correct=False
+[18/300] agentic_rag_tracer_2hop_comparison_74 12.2s success=True correct=False
+[19/300] agentic_rag_tracer_4hop_inference_11 12.5s success=True correct=False
+[20/300] agentic_rag_tracer_2hop_comparison_79 9.5s success=True correct=True
+[21/300] agentic_rag_tracer_4hop_inference_19 14.3s success=True correct=False
+[22/300] agentic_rag_tracer_4hop_comparison_6 14.4s success=True correct=True
+[23/300] agentic_rag_tracer_3hop_inference_102 15.4s success=True correct=False
+[24/300] agentic_rag_tracer_4hop_inference_59 15.6s success=True correct=False
+[25/300] agentic_rag_tracer_4hop_inference_77 16.2s success=True correct=True
+[26/300] agentic_rag_tracer_2hop_inference_54 6.0s success=True correct=False
+[27/300] agentic_rag_tracer_2hop_inference_280 5.6s success=True correct=True
+[28/300] agentic_rag_tracer_4hop_comparison_45 18.1s success=True correct=False
+[29/300] agentic_rag_tracer_3hop_comparison_92 13.1s success=True correct=False
+[30/300] agentic_rag_tracer_2hop_inference_28 6.1s success=True correct=True
+[31/300] agentic_rag_tracer_2hop_inference_239 12.4s success=True correct=True
+[32/300] agentic_rag_tracer_3hop_inference_38 9.0s success=True correct=False
+[33/300] agentic_rag_tracer_2hop_comparison_130 11.2s success=True correct=True
+[34/300] agentic_rag_tracer_2hop_comparison_191 15.0s success=True correct=False
+[35/300] agentic_rag_tracer_2hop_inference_358 6.2s success=True correct=True
+[36/300] agentic_rag_tracer_2hop_comparison_390 12.1s success=True correct=True
+[37/300] agentic_rag_tracer_2hop_inference_19 11.0s success=True correct=True
+[38/300] agentic_rag_tracer_4hop_inference_20 15.1s success=True correct=False
+[39/300] agentic_rag_tracer_4hop_inference_15 14.2s success=True correct=False
+[40/300] agentic_rag_tracer_2hop_comparison_418 14.6s success=True correct=True
+[41/300] agentic_rag_tracer_2hop_comparison_27 4.4s success=True correct=False
+[42/300] agentic_rag_tracer_4hop_inference_1 16.9s success=True correct=True
+[43/300] agentic_rag_tracer_2hop_comparison_33 7.9s success=True correct=False
+[44/300] agentic_rag_tracer_2hop_comparison_206 6.6s success=True correct=True
+[45/300] agentic_rag_tracer_2hop_comparison_316 10.1s success=True correct=True
+[46/300] agentic_rag_tracer_3hop_inference_28 16.5s success=True correct=True
+[47/300] agentic_rag_tracer_3hop_inference_103 18.7s success=True correct=True
+[48/300] agentic_rag_tracer_2hop_comparison_273 6.4s success=True correct=True
+[49/300] agentic_rag_tracer_2hop_comparison_425 10.0s success=True correct=True
+[50/300] agentic_rag_tracer_2hop_comparison_283 13.3s success=True correct=True
+[51/300] agentic_rag_tracer_4hop_inference_12 14.9s success=True correct=False
+[52/300] agentic_rag_tracer_2hop_inference_106 10.3s success=True correct=True
+[53/300] agentic_rag_tracer_3hop_comparison_177 11.7s success=True correct=False
+[54/300] agentic_rag_tracer_2hop_comparison_456 12.3s success=True correct=True
+[55/300] agentic_rag_tracer_2hop_comparison_18 9.2s success=True correct=True
+[56/300] agentic_rag_tracer_2hop_inference_205 17.7s success=True correct=True
+[57/300] agentic_rag_tracer_2hop_inference_260 6.2s success=True correct=True
+[58/300] agentic_rag_tracer_3hop_comparison_50 21.0s success=True correct=False
+[59/300] agentic_rag_tracer_3hop_comparison_7 15.9s success=True correct=True
+[60/300] agentic_rag_tracer_2hop_inference_281 5.3s success=True correct=False
+[61/300] agentic_rag_tracer_2hop_comparison_391 8.9s success=True correct=True
+[62/300] agentic_rag_tracer_2hop_comparison_166 8.7s success=True correct=True
+[63/300] agentic_rag_tracer_3hop_inference_77 10.6s success=True correct=False
+[64/300] agentic_rag_tracer_2hop_comparison_92 11.7s success=True correct=True
+[65/300] agentic_rag_tracer_2hop_inference_221 8.3s success=True correct=True
+[66/300] agentic_rag_tracer_2hop_comparison_84 8.2s success=True correct=False
+[67/300] agentic_rag_tracer_4hop_inference_50 19.0s success=True correct=True
+[68/300] agentic_rag_tracer_3hop_comparison_27 12.9s success=True correct=True
+[69/300] agentic_rag_tracer_2hop_inference_250 6.9s success=True correct=False
+[70/300] agentic_rag_tracer_4hop_inference_14 15.9s success=True correct=False
+[71/300] agentic_rag_tracer_2hop_inference_384 12.4s success=True correct=True
+[72/300] agentic_rag_tracer_2hop_inference_123 8.3s success=True correct=True
+[73/300] agentic_rag_tracer_3hop_comparison_117 10.6s success=True correct=False
+[74/300] agentic_rag_tracer_3hop_comparison_146 17.6s success=True correct=True
+[75/300] agentic_rag_tracer_3hop_comparison_41 11.4s success=True correct=True
+[76/300] agentic_rag_tracer_2hop_inference_387 4.9s success=True correct=False
+[77/300] agentic_rag_tracer_2hop_comparison_202 9.2s success=True correct=True
+[78/300] agentic_rag_tracer_2hop_comparison_253 12.2s success=True correct=True
+[79/300] agentic_rag_tracer_2hop_inference_196 8.5s success=True correct=True
+[80/300] agentic_rag_tracer_3hop_comparison_42 32.4s success=True correct=True
+[81/300] agentic_rag_tracer_2hop_comparison_187 8.8s success=True correct=True
+[82/300] agentic_rag_tracer_2hop_comparison_254 15.5s success=True correct=False
+[83/300] agentic_rag_tracer_2hop_comparison_387 12.4s success=True correct=True
+[84/300] agentic_rag_tracer_2hop_comparison_255 10.3s success=True correct=False
+[85/300] agentic_rag_tracer_2hop_inference_317 10.2s success=True correct=False
+[86/300] agentic_rag_tracer_2hop_comparison_4 11.6s success=True correct=True
+[87/300] agentic_rag_tracer_3hop_inference_36 15.1s success=True correct=True
+[88/300] agentic_rag_tracer_3hop_inference_82 23.4s success=True correct=True
+[89/300] agentic_rag_tracer_4hop_comparison_30 12.1s success=True correct=False
+[90/300] agentic_rag_tracer_4hop_comparison_60 16.5s success=True correct=True
+[91/300] agentic_rag_tracer_2hop_inference_377 9.7s success=True correct=True
+[92/300] agentic_rag_tracer_2hop_comparison_306 11.0s success=True correct=True
+[93/300] agentic_rag_tracer_2hop_comparison_164 17.9s success=True correct=True
+[94/300] agentic_rag_tracer_3hop_inference_97 12.6s success=True correct=True
+[95/300] agentic_rag_tracer_4hop_comparison_22 20.4s success=True correct=False
+[96/300] agentic_rag_tracer_4hop_inference_49 24.8s success=True correct=False
+[97/300] agentic_rag_tracer_2hop_comparison_300 12.1s success=True correct=True
+[98/300] agentic_rag_tracer_2hop_inference_178 6.6s success=True correct=False
+[99/300] agentic_rag_tracer_2hop_inference_298 5.4s success=True correct=False
+[100/300] agentic_rag_tracer_2hop_inference_166 23.4s success=True correct=True
+[101/300] agentic_rag_tracer_4hop_comparison_8 23.1s success=True correct=False
+[102/300] agentic_rag_tracer_2hop_comparison_186 7.4s success=True correct=False
+[103/300] agentic_rag_tracer_3hop_inference_34 14.6s success=True correct=True
+[104/300] agentic_rag_tracer_3hop_comparison_138 5.8s success=True correct=False
+[105/300] agentic_rag_tracer_3hop_comparison_48 24.5s success=True correct=False
+[106/300] agentic_rag_tracer_2hop_inference_62 13.3s success=True correct=True
+[107/300] agentic_rag_tracer_4hop_comparison_46 15.9s success=True correct=False
+[108/300] agentic_rag_tracer_2hop_comparison_327 10.3s success=True correct=True
+[109/300] agentic_rag_tracer_2hop_inference_193 13.3s success=True correct=False
+[110/300] agentic_rag_tracer_2hop_comparison_0 6.5s success=True correct=True
+[111/300] agentic_rag_tracer_2hop_inference_42 8.7s success=True correct=False
+[112/300] agentic_rag_tracer_4hop_inference_0 14.6s success=True correct=False
+[113/300] agentic_rag_tracer_2hop_inference_11 15.4s success=True correct=False
+[114/300] agentic_rag_tracer_2hop_comparison_236 12.1s success=True correct=True
+[115/300] agentic_rag_tracer_3hop_comparison_73 9.7s success=True correct=False
+[116/300] agentic_rag_tracer_3hop_inference_68 13.6s success=True correct=True
+[117/300] agentic_rag_tracer_2hop_inference_60 13.9s success=True correct=True
+[118/300] agentic_rag_tracer_2hop_inference_215 6.2s success=True correct=False
+[119/300] agentic_rag_tracer_2hop_comparison_448 12.3s success=True correct=True
+[120/300] agentic_rag_tracer_2hop_comparison_200 5.4s success=True correct=True
+[121/300] agentic_rag_tracer_2hop_inference_91 9.3s success=True correct=True
+[122/300] agentic_rag_tracer_3hop_comparison_53 12.2s success=True correct=False
+[123/300] agentic_rag_tracer_2hop_inference_195 12.7s success=True correct=False
+[124/300] agentic_rag_tracer_3hop_inference_75 10.5s success=True correct=False
+[125/300] agentic_rag_tracer_4hop_comparison_21 15.6s success=True correct=False
+[126/300] agentic_rag_tracer_2hop_comparison_385 10.6s success=True correct=True
+[127/300] agentic_rag_tracer_3hop_inference_66 12.3s success=True correct=False
+[128/300] agentic_rag_tracer_3hop_comparison_99 6.8s success=True correct=True
+[129/300] agentic_rag_tracer_2hop_comparison_28 7.1s success=True correct=True
+[130/300] agentic_rag_tracer_3hop_comparison_167 12.8s success=True correct=False
+[131/300] agentic_rag_tracer_2hop_comparison_128 13.6s success=True correct=True
+[132/300] agentic_rag_tracer_3hop_comparison_122 18.6s success=True correct=True
+[133/300] agentic_rag_tracer_2hop_inference_99 14.7s success=True correct=False
+[134/300] agentic_rag_tracer_2hop_comparison_54 11.9s success=True correct=True
+[135/300] agentic_rag_tracer_3hop_comparison_144 12.3s success=True correct=False
+[136/300] agentic_rag_tracer_2hop_comparison_141 12.5s success=True correct=False
+[137/300] agentic_rag_tracer_2hop_comparison_194 10.5s success=True correct=True
+[138/300] agentic_rag_tracer_4hop_inference_75 14.6s success=True correct=False
+[139/300] agentic_rag_tracer_2hop_inference_61 12.2s success=True correct=True
+[140/300] agentic_rag_tracer_2hop_comparison_291 12.4s success=True correct=True
+[141/300] agentic_rag_tracer_2hop_inference_184 7.5s success=True correct=False
+[142/300] agentic_rag_tracer_2hop_inference_246 10.9s success=True correct=True
+[143/300] agentic_rag_tracer_2hop_comparison_125 15.1s success=True correct=True
+[144/300] agentic_rag_tracer_2hop_comparison_431 12.9s success=True correct=True
+[145/300] agentic_rag_tracer_2hop_comparison_3 10.5s success=True correct=True
+[146/300] agentic_rag_tracer_2hop_comparison_376 9.2s success=True correct=True
+[147/300] agentic_rag_tracer_4hop_inference_24 5.5s success=True correct=False
+[148/300] agentic_rag_tracer_2hop_comparison_373 20.5s success=True correct=True
+[149/300] agentic_rag_tracer_2hop_comparison_386 12.1s success=True correct=True
+[150/300] agentic_rag_tracer_3hop_inference_61 18.0s success=True correct=True
+[151/300] agentic_rag_tracer_3hop_inference_85 12.6s success=True correct=True
+[152/300] agentic_rag_tracer_2hop_inference_125 6.2s success=True correct=False
+[153/300] agentic_rag_tracer_2hop_inference_379 7.9s success=True correct=False
+[154/300] agentic_rag_tracer_2hop_comparison_393 11.0s success=True correct=True
+[155/300] agentic_rag_tracer_2hop_inference_26 18.7s success=True correct=True
+[156/300] agentic_rag_tracer_2hop_inference_164 11.5s success=True correct=True
+[157/300] agentic_rag_tracer_2hop_comparison_398 7.9s success=True correct=True
+[158/300] agentic_rag_tracer_2hop_comparison_267 11.1s success=True correct=True
+[159/300] agentic_rag_tracer_3hop_comparison_132 19.0s success=True correct=False
+[160/300] agentic_rag_tracer_2hop_inference_93 9.3s success=True correct=True
+[161/300] agentic_rag_tracer_2hop_inference_262 14.2s success=True correct=False
+[162/300] agentic_rag_tracer_3hop_comparison_102 13.1s success=True correct=True
+[163/300] agentic_rag_tracer_2hop_comparison_271 11.7s success=True correct=True
+[164/300] agentic_rag_tracer_2hop_comparison_389 10.9s success=True correct=True
+[165/300] agentic_rag_tracer_3hop_comparison_169 10.3s success=True correct=False
+[166/300] agentic_rag_tracer_4hop_comparison_37 13.2s success=True correct=False
+[167/300] agentic_rag_tracer_2hop_comparison_339 11.5s success=True correct=True
+[168/300] agentic_rag_tracer_4hop_inference_28 6.7s success=True correct=False
+[169/300] agentic_rag_tracer_2hop_comparison_266 6.6s success=True correct=False
+[170/300] agentic_rag_tracer_2hop_inference_121 13.7s success=True correct=False
+[171/300] agentic_rag_tracer_2hop_comparison_335 24.4s success=True correct=True
+[172/300] agentic_rag_tracer_2hop_comparison_80 10.3s success=True correct=False
+[173/300] agentic_rag_tracer_2hop_comparison_93 13.0s success=True correct=False
+[174/300] agentic_rag_tracer_2hop_comparison_29 15.1s success=True correct=False
+[175/300] agentic_rag_tracer_2hop_comparison_276 10.2s success=True correct=False
+[176/300] agentic_rag_tracer_2hop_inference_118 11.4s success=True correct=True
+[177/300] agentic_rag_tracer_4hop_inference_79 20.5s success=True correct=True
+[178/300] agentic_rag_tracer_2hop_comparison_447 5.8s success=True correct=False
+[179/300] agentic_rag_tracer_2hop_inference_148 13.1s success=True correct=True
+[180/300] agentic_rag_tracer_2hop_inference_368 10.4s success=True correct=True
+[181/300] agentic_rag_tracer_2hop_comparison_207 10.0s success=True correct=True
+[182/300] agentic_rag_tracer_2hop_comparison_67 13.7s success=True correct=False
+[183/300] agentic_rag_tracer_3hop_comparison_112 15.4s success=True correct=False
+[184/300] agentic_rag_tracer_2hop_inference_220 7.2s success=True correct=True
+[185/300] agentic_rag_tracer_2hop_inference_213 8.9s success=True correct=False
+[186/300] agentic_rag_tracer_2hop_comparison_127 8.4s success=True correct=True
+[187/300] agentic_rag_tracer_3hop_inference_21 10.4s success=True correct=False
+[188/300] agentic_rag_tracer_4hop_comparison_50 41.4s success=True correct=False
+[189/300] agentic_rag_tracer_2hop_comparison_324 9.8s success=True correct=True
+[190/300] agentic_rag_tracer_2hop_comparison_346 14.3s success=True correct=False
+[191/300] agentic_rag_tracer_2hop_comparison_147 10.1s success=True correct=True
+[192/300] agentic_rag_tracer_2hop_comparison_452 10.9s success=True correct=True
+[193/300] agentic_rag_tracer_4hop_comparison_5 9.3s success=True correct=False
+[194/300] agentic_rag_tracer_2hop_inference_129 10.7s success=True correct=True
+[195/300] agentic_rag_tracer_2hop_inference_173 17.1s success=True correct=True
+[196/300] agentic_rag_tracer_3hop_inference_48 29.9s success=True correct=False
+[197/300] agentic_rag_tracer_2hop_inference_92 10.8s success=True correct=False
+[198/300] agentic_rag_tracer_2hop_inference_268 11.8s success=True correct=True
+[199/300] agentic_rag_tracer_4hop_inference_33 21.7s success=True correct=False
+[200/300] agentic_rag_tracer_2hop_comparison_240 11.9s success=True correct=True
+[201/300] agentic_rag_tracer_2hop_comparison_331 9.5s success=True correct=True
+[202/300] agentic_rag_tracer_2hop_inference_287 7.6s success=True correct=False
+[203/300] agentic_rag_tracer_2hop_comparison_73 11.3s success=True correct=False
+[204/300] agentic_rag_tracer_3hop_comparison_148 19.5s success=True correct=False
+[205/300] agentic_rag_tracer_2hop_comparison_6 12.5s success=True correct=True
+[206/300] agentic_rag_tracer_2hop_inference_150 18.2s success=True correct=False
+[207/300] agentic_rag_tracer_2hop_inference_176 5.5s success=True correct=False
+[208/300] agentic_rag_tracer_2hop_inference_390 11.6s success=True correct=True
+[209/300] agentic_rag_tracer_2hop_comparison_2 8.1s success=True correct=True
+[210/300] agentic_rag_tracer_2hop_comparison_86 7.7s success=True correct=True
+[211/300] agentic_rag_tracer_4hop_comparison_9 14.3s success=True correct=False
+[212/300] agentic_rag_tracer_2hop_comparison_378 8.7s success=True correct=True
+[213/300] agentic_rag_tracer_4hop_inference_69 15.2s success=True correct=False
+[214/300] agentic_rag_tracer_2hop_comparison_382 13.8s success=True correct=False
+[215/300] agentic_rag_tracer_2hop_comparison_451 14.0s success=True correct=True
+[216/300] agentic_rag_tracer_2hop_inference_323 6.8s success=True correct=True
+[217/300] agentic_rag_tracer_3hop_inference_100 11.2s success=True correct=False
+[218/300] agentic_rag_tracer_2hop_comparison_82 10.6s success=True correct=True
+[219/300] agentic_rag_tracer_2hop_inference_24 11.7s success=True correct=True
+[220/300] agentic_rag_tracer_2hop_comparison_369 10.4s success=True correct=True
+[221/300] agentic_rag_tracer_2hop_inference_81 10.4s success=True correct=False
+[222/300] agentic_rag_tracer_2hop_comparison_286 10.5s success=True correct=True
+[223/300] agentic_rag_tracer_2hop_comparison_235 9.1s success=True correct=True
+[224/300] agentic_rag_tracer_4hop_inference_23 16.2s success=True correct=False
+[225/300] agentic_rag_tracer_2hop_comparison_237 10.8s success=True correct=True
+[226/300] agentic_rag_tracer_2hop_comparison_416 18.6s success=True correct=True
+[227/300] agentic_rag_tracer_2hop_inference_17 12.0s success=True correct=True
+[228/300] agentic_rag_tracer_2hop_inference_341 6.7s success=True correct=True
+[229/300] agentic_rag_tracer_2hop_comparison_44 11.2s success=True correct=True
+[230/300] agentic_rag_tracer_2hop_inference_216 11.6s success=True correct=False
+[231/300] agentic_rag_tracer_2hop_comparison_440 12.4s success=True correct=True
+[232/300] agentic_rag_tracer_3hop_comparison_110 11.0s success=True correct=True
+[233/300] agentic_rag_tracer_2hop_inference_210 12.5s success=True correct=False
+[234/300] agentic_rag_tracer_2hop_comparison_168 10.3s success=True correct=False
+[235/300] agentic_rag_tracer_2hop_comparison_161 18.8s success=True correct=True
+[236/300] agentic_rag_tracer_4hop_inference_76 21.8s success=True correct=False
+[237/300] agentic_rag_tracer_2hop_comparison_165 13.8s success=True correct=False
+[238/300] agentic_rag_tracer_3hop_comparison_101 20.5s success=True correct=True
+[239/300] agentic_rag_tracer_2hop_inference_59 11.4s success=True correct=True
+[240/300] agentic_rag_tracer_3hop_comparison_133 28.9s success=True correct=False
+[241/300] agentic_rag_tracer_4hop_comparison_18 13.0s success=True correct=True
+[242/300] agentic_rag_tracer_2hop_comparison_349 11.8s success=True correct=True
+[243/300] agentic_rag_tracer_2hop_inference_330 10.0s success=True correct=False
+[244/300] agentic_rag_tracer_4hop_inference_64 24.3s success=True correct=False
+[245/300] agentic_rag_tracer_3hop_comparison_63 28.4s success=True correct=False
+[246/300] agentic_rag_tracer_2hop_inference_304 9.9s success=True correct=False
+[247/300] agentic_rag_tracer_2hop_comparison_46 16.8s success=True correct=True
+[248/300] agentic_rag_tracer_2hop_comparison_83 9.6s success=True correct=True
+[249/300] agentic_rag_tracer_2hop_comparison_170 12.3s success=True correct=True
+[250/300] agentic_rag_tracer_2hop_comparison_64 9.5s success=True correct=False
+[251/300] agentic_rag_tracer_2hop_inference_337 7.3s success=True correct=False
+[252/300] agentic_rag_tracer_2hop_comparison_25 18.1s success=True correct=False
+[253/300] agentic_rag_tracer_2hop_comparison_365 10.5s success=True correct=True
+[254/300] agentic_rag_tracer_2hop_inference_291 16.4s success=True correct=True
+[255/300] agentic_rag_tracer_2hop_comparison_118 18.2s success=True correct=True
+[256/300] agentic_rag_tracer_2hop_inference_324 9.8s success=True correct=True
+[257/300] agentic_rag_tracer_2hop_comparison_421 13.4s success=True correct=False
+[258/300] agentic_rag_tracer_3hop_comparison_8 15.8s success=True correct=False
+[259/300] agentic_rag_tracer_2hop_comparison_205 11.0s success=True correct=True
+[260/300] agentic_rag_tracer_2hop_inference_20 6.8s success=True correct=True
+[261/300] agentic_rag_tracer_2hop_inference_385 6.0s success=True correct=True
+[262/300] agentic_rag_tracer_2hop_comparison_243 11.6s success=True correct=False
+[263/300] agentic_rag_tracer_2hop_comparison_358 9.7s success=True correct=True
+[264/300] agentic_rag_tracer_2hop_comparison_102 9.5s success=True correct=True
+[265/300] agentic_rag_tracer_4hop_comparison_51 15.5s success=True correct=False
+[266/300] agentic_rag_tracer_2hop_inference_264 11.5s success=True correct=True
+[267/300] agentic_rag_tracer_3hop_comparison_75 17.3s success=True correct=False
+[268/300] agentic_rag_tracer_3hop_comparison_47 6.8s success=True correct=False
+[269/300] agentic_rag_tracer_2hop_inference_211 13.9s success=True correct=True
+[270/300] agentic_rag_tracer_2hop_inference_263 12.8s success=True correct=True
+[271/300] agentic_rag_tracer_2hop_comparison_437 11.1s success=True correct=True
+[272/300] agentic_rag_tracer_2hop_inference_84 12.8s success=True correct=False
+[273/300] agentic_rag_tracer_3hop_inference_22 8.4s success=True correct=False
+[274/300] agentic_rag_tracer_3hop_inference_55 7.0s success=True correct=False
+[275/300] agentic_rag_tracer_2hop_inference_352 13.1s success=True correct=False
+[276/300] agentic_rag_tracer_2hop_comparison_309 9.3s success=True correct=True
+[277/300] agentic_rag_tracer_2hop_comparison_285 11.8s success=True correct=False
+[278/300] agentic_rag_tracer_2hop_inference_290 10.3s success=True correct=True
+[279/300] agentic_rag_tracer_2hop_comparison_223 5.2s success=True correct=True
+[280/300] agentic_rag_tracer_2hop_inference_104 9.8s success=True correct=False
+[281/300] agentic_rag_tracer_3hop_comparison_111 16.0s success=True correct=False
+[282/300] agentic_rag_tracer_3hop_inference_20 15.2s success=True correct=True
+[283/300] agentic_rag_tracer_2hop_comparison_406 9.5s success=True correct=False
+[284/300] agentic_rag_tracer_3hop_comparison_58 9.3s success=True correct=True
+[285/300] agentic_rag_tracer_2hop_inference_102 7.2s success=True correct=True
+[286/300] agentic_rag_tracer_2hop_comparison_408 9.4s success=True correct=True
+[287/300] agentic_rag_tracer_3hop_comparison_176 7.4s success=True correct=False
+[288/300] agentic_rag_tracer_2hop_inference_351 16.6s success=True correct=True
+[289/300] agentic_rag_tracer_4hop_inference_30 12.4s success=True correct=True
+[290/300] agentic_rag_tracer_2hop_comparison_265 7.4s success=True correct=True
+[291/300] agentic_rag_tracer_3hop_inference_1 18.1s success=True correct=False
+[292/300] agentic_rag_tracer_2hop_comparison_143 9.7s success=True correct=False
+[293/300] agentic_rag_tracer_4hop_inference_45 10.3s success=True correct=False
+[294/300] agentic_rag_tracer_2hop_comparison_245 32.0s success=True correct=False
+[295/300] agentic_rag_tracer_2hop_inference_168 10.1s success=True correct=True
+[296/300] agentic_rag_tracer_2hop_comparison_95 14.1s success=True correct=True
+[297/300] agentic_rag_tracer_3hop_comparison_29 12.3s success=True correct=False
+[298/300] agentic_rag_tracer_4hop_inference_32 14.6s success=True correct=True
+[299/300] agentic_rag_tracer_2hop_comparison_454 10.8s success=True correct=False
+[300/300] agentic_rag_tracer_3hop_comparison_131 11.2s success=True correct=False
+done: 300/300 finished, 166 correct, 0 errors
+traces: results/traces/run-6420496_qwen2.5-7b-instruct_all300_c24_lognormal1.0-0.8_llm8_w8_emb-cpu
+---------------------------------------
+Begin Slurm Epilog: Oct-20-2026 10:32:01
+Job ID:        6420496
+User ID:       aghosh367
+Account:       coc
+Job name:      paa-slice
+Resources:     cpu=8,gres/gpu:l40s=1,mem=32G,node=1
+Rsrc Used:     cput=01:42:24,vmem=0,walltime=00:12:48,mem=11121164K,energy_used=0
+Partition:     ice-gpu
+QOS:           coc-ice
+Nodes:         atl1-1-03-004-27-0
+---------------------------------------
