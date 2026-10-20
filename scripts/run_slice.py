@@ -20,12 +20,18 @@ decode_s. With --llm vllm, the server's /metrics are sampled to
 server/vllm_metrics.jsonl (a subfolder, so trace loaders that glob *.jsonl
 see only job traces).
 
+--arrival-rate R switches to open loop: jobs arrive at seeded random times, R per
+second on average (Poisson; --arrival-cv > 1 makes arrivals burstier), and each
+starts at its arrival whatever else is running. Job completion time is then
+end_ts - arrival_ts. Jobs run in a seeded shuffled order (the dataset is sorted
+2-hop, 3-hop, 4-hop, so its own order would make load climb through a run).
+
 Server settings the script can't see (vllm serve flags, VLLM_* env vars such as
 VLLM_BATCH_INVARIANT) are read from the environment the sbatch script sets up
 (PAA_VLLM_ARGS) and recorded in the manifest and the run name.
 
-Until the Tracer grows `run_id` / `arrival_ts`, the run directory is what
-groups jobs that ran together.
+The run directory is what groups jobs that ran together; open-loop arrival
+times are in the manifest's job entries.
 """
 
 from __future__ import annotations
@@ -89,7 +95,11 @@ def run_label(args, model: str | None, num_tasks: int) -> str:
     if delay[0].isdigit():
         delay = f"delay{delay}"
     retriever = f"emb-{args.embedding_device}" if args.retriever == "embedding" else args.retriever
-    parts = [name, f"{args.tasks}{num_tasks}", f"c{args.concurrency}", delay, retriever]
+    arrivals = f"c{args.concurrency}"
+    if args.arrival_rate:
+        arrivals = f"poisson{args.arrival_rate:g}" if args.arrival_cv == 1 else \
+            f"arr{args.arrival_rate:g}cv{args.arrival_cv:g}"
+    parts = [name, f"{args.tasks}{num_tasks}", arrivals, delay, retriever]
     if args.retrieve_workers:
         parts.insert(4, f"w{args.retrieve_workers}")
     if args.llm_slots:
@@ -137,6 +147,13 @@ def main() -> None:
     p.add_argument("--embedding-device", choices=["cpu", "cuda"], default="cpu",
                    help="where query/passage embedding runs; cpu keeps it off the vLLM GPU")
     p.add_argument("--concurrency", type=int, default=1, help="jobs in flight at once (closed loop)")
+    p.add_argument("--arrival-rate", type=float, default=None, metavar="R",
+                   help="open loop: jobs arrive R per second on average, independent of the system")
+    p.add_argument("--arrival-cv", type=float, default=1.0,
+                   help="coefficient of variation of the gaps between arrivals: 1 = Poisson, "
+                        ">1 = bursty (gamma-distributed gaps with the same mean)")
+    p.add_argument("--dataset-order", action="store_true",
+                   help="run jobs in dataset order (2-hop first, 4-hop last) instead of shuffled")
     p.add_argument("--retrieve-delay", default=None, metavar="SPEC",
                    help="emulated search-backend latency added to each retrieve: SECONDS, "
                         "uniform:LOW,HIGH or lognormal:MEDIAN,SIGMA (see agent/delay.py)")
@@ -157,6 +174,10 @@ def main() -> None:
     args = p.parse_args()
     if args.concurrency < 1:
         p.error("--concurrency must be >= 1")
+    if args.arrival_rate is not None and (args.arrival_rate <= 0 or args.concurrency != 1):
+        p.error("--arrival-rate must be > 0, and replaces --concurrency (open vs closed loop)")
+    if args.arrival_cv <= 0:
+        p.error("--arrival-cv must be > 0")
     if args.retrieve_workers < 0 or args.llm_slots < 0:
         p.error("--retrieve-workers and --llm-slots must be >= 0")
     try:
@@ -170,6 +191,9 @@ def main() -> None:
     if args.limit is not None and args.limit < len(tasks):
         picked = {t.task_id for t in random.Random(args.seed).sample(tasks, args.limit)}
         tasks = [t for t in tasks if t.task_id in picked]
+    if not args.dataset_order:
+        tasks = list(tasks)
+        random.Random(f"{args.seed}:order").shuffle(tasks)
 
     docs = pool_documents(pool)
     embedding_device = None
@@ -191,14 +215,17 @@ def main() -> None:
                               chat_template_kwargs={"enable_thinking": False} if args.no_thinking else None,
                               stream=not args.no_stream)
 
-    mode = "serial" if args.concurrency == 1 else "concurrent"
+    mode = "open_loop" if args.arrival_rate else "serial" if args.concurrency == 1 else "concurrent"
     run_id = args.run_id or f"{args.run_prefix or time.strftime('%Y%m%d-%H%M%S')}_{run_label(args, model, len(tasks))}"
     run_dir = Path(args.out_dir) / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     manifest = {
         "run_id": run_id,
         "mode": mode,
-        "concurrency": args.concurrency,
+        "concurrency": None if args.arrival_rate else args.concurrency,
+        "arrival_rate": args.arrival_rate,
+        "arrival_cv": args.arrival_cv if args.arrival_rate else None,
+        "job_order": "dataset" if args.dataset_order else "shuffled",
         "started_at": time.time(),
         "host": socket.gethostname(),
         "gpu": gpu_name(),
@@ -229,7 +256,7 @@ def main() -> None:
 
     save_manifest()
     print(f"run {run_id}: {len(tasks)} tasks, {len(docs)} passages, llm={args.llm} model={model} "
-          f"concurrency={args.concurrency} retrieve_delay={args.retrieve_delay} "
+          f"{'arrival_rate=%g/s cv=%g' % (args.arrival_rate, args.arrival_cv) if args.arrival_rate else 'concurrency=%d' % args.concurrency} retrieve_delay={args.retrieve_delay} "
           f"retrieve_workers={args.retrieve_workers or 'unlimited'} llm_slots={args.llm_slots or 'unlimited'} -> {run_dir}")
 
     poller = None
@@ -238,7 +265,7 @@ def main() -> None:
         poller = MetricsPoller(args.base_url, run_dir / "server" / "vllm_metrics.jsonl",
                                interval_s=args.metrics_interval).start()
 
-    def run_job(task) -> None:
+    def run_job(task, arrival_ts: float | None = None) -> None:
         job_id = task.task_id.replace("/", "_")
         llm = backend if args.llm == "vllm" else MockLLM(mock_script(task))
         delay = job_delay(delay_sampler, args.seed, job_id) if delay_sampler else None
@@ -253,6 +280,8 @@ def main() -> None:
             traceback.print_exc()
         t1 = time.time()
         entry.update(start_ts=t0, end_ts=t1, wall_s=round(t1 - t0, 3))
+        if arrival_ts is not None:   # open loop: completion time counts from arrival
+            entry.update(arrival_ts=arrival_ts, jct_s=round(t1 - arrival_ts, 3))
         with lock:
             manifest["jobs"].append(entry)
             save_manifest()
@@ -261,7 +290,19 @@ def main() -> None:
         print(f"[{n}/{len(tasks)}] {job_id} {entry['wall_s']:.1f}s {status}", flush=True)
 
     try:
-        if args.concurrency == 1:
+        if args.arrival_rate:
+            # gamma gaps with mean 1/R and the given CV (shape 1/CV^2); CV 1 = exponential = Poisson
+            rng, shape = random.Random(f"{args.seed}:arrivals"), 1 / args.arrival_cv ** 2
+            t0, offset = time.time(), 0.0
+            with ThreadPoolExecutor(max_workers=len(tasks)) as pool_:   # a thread per job: no cap
+                futures = []
+                for task in tasks:
+                    time.sleep(max(0.0, t0 + offset - time.time()))
+                    futures.append(pool_.submit(run_job, task, t0 + offset))
+                    offset += rng.gammavariate(shape, 1 / (args.arrival_rate * shape))
+                for f in futures:
+                    f.result()
+        elif args.concurrency == 1:
             for task in tasks:
                 run_job(task)
         else:
@@ -280,6 +321,10 @@ def main() -> None:
     manifest["num_errors"] = sum(1 for j in jobs if "error" in j)
     manifest["makespan_s"] = manifest["finished_at"] - manifest["started_at"]
     manifest["jobs_per_s"] = len(jobs) / manifest["makespan_s"] if manifest["makespan_s"] > 0 else None
+    if args.arrival_rate:
+        jct = sorted(j["jct_s"] for j in jobs)
+        manifest["jct_mean_s"] = sum(jct) / len(jct)
+        manifest["jct_p95_s"] = jct[min(len(jct) - 1, int(0.95 * len(jct)))]
     save_manifest()
     print(f"done: {manifest['num_succeeded']}/{len(jobs)} finished, {manifest['num_correct']} correct, "
           f"{manifest['num_errors']} errors")

@@ -14,6 +14,9 @@ from serving.instrumentation.vllm_metrics import MetricsPoller, parse_metrics
 from test_workloads import _write_fixtures
 
 ROOT = Path(__file__).resolve().parent.parent
+# Span times are time.time(); WSL's clock can step back a few ms, so "A ends before B
+# starts" checks allow this much overlap.
+CLOCK_SLACK = 0.01
 
 
 @pytest.mark.parametrize("spec", ["0.25", "uniform:0.1,0.4", "lognormal:0.3,0.8"])
@@ -105,7 +108,9 @@ def test_concurrent_run_overlaps_jobs_and_records_delays(tmp_path):
     assert manifest["retrieve_delay"] == "0.3" and manifest["num_errors"] == 0
     assert len(traces) == manifest["num_tasks"] == len(manifest["jobs"]) == 6
     rets = [r for rows in traces.values() for r in rows if r.get("phase") == "retrieve"]
-    assert rets and all(r["meta"]["injected_delay_s"] == 0.3 and r["duration_s"] >= 0.3 for r in rets)
+    delays = [r for rows in traces.values() for r in rows if r.get("phase") == "retrieve_delay"]
+    assert rets and len(delays) == len(rets)
+    assert all(r["meta"]["delay_s"] == 0.3 and r["duration_s"] >= 0.3 for r in delays)
     # 3 workers: job-seconds per second of run time well above 1 (serial would be <= 1)
     assert sum(j["wall_s"] for j in manifest["jobs"]) / manifest["makespan_s"] > 2
     spans = sorted((s["start_ts"], s["end_ts"]) for s in (rows[-1] for rows in traces.values()))
@@ -116,8 +121,8 @@ def test_concurrency_one_is_serial(tmp_path):
     manifest, traces = _run_slice(tmp_path)
     assert manifest["mode"] == "serial" and manifest["retrieve_delay"] is None
     ends = sorted((rows[-1]["start_ts"], rows[-1]["end_ts"]) for rows in traces.values())
-    assert all(b[0] >= a[1] for a, b in zip(ends, ends[1:]))
-    assert all("injected_delay_s" not in r["meta"] for rows in traces.values() for r in rows[:-1])
+    assert all(b[0] >= a[1] - CLOCK_SLACK for a, b in zip(ends, ends[1:]))
+    assert not any(r["phase"] == "retrieve_delay" for rows in traces.values() for r in rows[:-1])
 
 
 def test_retrieve_workers_cap_overlapping_retrieves(tmp_path):
@@ -127,7 +132,7 @@ def test_retrieve_workers_cap_overlapping_retrieves(tmp_path):
     spans = [r for rows in traces.values() for r in rows[:-1]]
     rets = sorted((r["start_ts"], r["end_ts"]) for r in spans if r["phase"] == "retrieve")
     waits = [r for r in spans if r["phase"] == "wait"]
-    assert all(b[0] >= a[1] for a, b in zip(rets, rets[1:]))   # one worker: retrieves never overlap
+    assert all(b[0] >= a[1] - CLOCK_SLACK for a, b in zip(rets, rets[1:]))   # one worker: retrieves never overlap
     assert len(waits) == len(rets) and all(w["meta"]["resource"] == "retrieve_slot" for w in waits)
     assert max(w["duration_s"] for w in waits) > 0.1           # 3 jobs on 1 worker: someone queued
 
@@ -138,5 +143,30 @@ def test_llm_slots_cap_overlapping_generations(tmp_path):
     spans = [r for rows in traces.values() for r in rows[:-1]]
     gens = sorted((r["start_ts"], r["end_ts"]) for r in spans if r["phase"] == "llm_generate")
     waits = [r for r in spans if r["phase"] == "wait"]
-    assert all(b[0] >= a[1] for a, b in zip(gens, gens[1:]))   # one slot: generations never overlap
+    assert all(b[0] >= a[1] - CLOCK_SLACK for a, b in zip(gens, gens[1:]))   # one slot: generations never overlap
     assert len(waits) == len(gens) and {w["meta"]["resource"] for w in waits} == {"llm_slot"}
+
+
+def test_open_loop_jobs_start_at_their_arrival_times(tmp_path):
+    manifest, traces = _run_slice(tmp_path, "--arrival-rate", "10", "--retrieve-delay", "0.2")
+    jobs = manifest["jobs"]
+    assert manifest["mode"] == "open_loop" and manifest["arrival_rate"] == 10 and manifest["num_errors"] == 0
+    assert len(jobs) == len(traces) == 6 and manifest["job_order"] == "shuffled"
+    arrivals = sorted(j["arrival_ts"] for j in jobs)
+    assert arrivals[-1] - arrivals[0] < 5                      # ~0.1 s apart on average, not run back to back
+    assert all(0 <= j["start_ts"] - j["arrival_ts"] < 0.1 for j in jobs)
+    assert all(j["jct_s"] >= j["wall_s"] for j in jobs)
+    assert manifest["jct_p95_s"] >= manifest["jct_mean_s"] > 0
+    # arrivals don't wait for earlier jobs: jobs overlap although nothing caps concurrency
+    spans = sorted((j["start_ts"], j["end_ts"]) for j in jobs)
+    assert any(b[0] < a[1] for a, b in zip(spans, spans[1:]))
+
+
+def test_open_loop_arrivals_are_seeded(tmp_path):
+    gaps = []
+    for name in ("a", "b"):
+        (tmp_path / name).mkdir()
+        manifest, _ = _run_slice(tmp_path / name, "--arrival-rate", "20", "--arrival-cv", "3")
+        arr = sorted(j["arrival_ts"] for j in manifest["jobs"])
+        gaps.append([round(y - x, 2) for x, y in zip(arr, arr[1:])])
+    assert gaps[0] == gaps[1]

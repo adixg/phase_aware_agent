@@ -9,6 +9,7 @@
 #   sbatch scripts/run_slice.sbatch --concurrency 8 --retrieve-delay lognormal:0.3,0.8
 #   sbatch scripts/run_slice.sbatch --concurrency 32 --retrieve-delay lognormal:0.3,0.8 --retrieve-workers 4
 #   sbatch scripts/run_slice.sbatch --concurrency 32 --llm-slots 8   # LLM calls queue in the client (WAIT spans)
+#   sbatch scripts/run_slice.sbatch --arrival-rate 1.5      # open loop: Poisson arrivals, 1.5 jobs/s
 #   MAX_NUM_SEQS=16 sbatch ...               # vLLM runs at most 16 requests per step; the rest queue
 #   VLLM_ARGS="--num-gpu-blocks-override 1500" sbatch ...  # extra vllm serve flags (here: a small KV cache)
 #   VLLM_BATCH_INVARIANT=1 sbatch ...        # VLLM_* env vars reach vllm serve; recorded in the manifest

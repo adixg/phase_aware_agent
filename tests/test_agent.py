@@ -37,7 +37,7 @@ def test_default_script_trace_shape():
     assert result.success
     assert result.answer == "The population of Paris, doubled, is approximately 4.2 million."
     assert sorted(spans[0].meta) == ["output_text", "output_tokens", "prompt_tokens", "step"]
-    assert sorted(spans[1].meta) == ["doc_ids", "query", "score", "search_s", "step", "top_doc"]
+    assert sorted(spans[1].meta) == ["doc_ids", "query", "score", "step", "top_doc"]
     assert sorted(spans[5].meta) == ["expr", "result", "step", "tool"]
 
 
@@ -120,13 +120,15 @@ def test_last_step_gets_the_finish_note_in_its_prompt_only():
     assert [s.meta.get("last_step_note") for s in tracer.spans if s.phase == LLM] == [None, None, True]
 
 
-def test_retrieve_delay_is_inside_the_span_and_recorded_apart():
+def test_retrieve_delay_is_its_own_span_after_the_search():
     llm = MockLLM(DEFAULT_SCRIPT, tokens_per_second=1e9, jitter_s=(0.0, 0.0))
     agent = LangGraphReActAgent(llm, LocalRetriever.from_documents(DOCS), retrieve_delay=lambda step: 0.05 * (step + 1))
     tracer = Tracer("job")
     agent.run("job", QUESTION, tracer)
+    phases = [s.phase for s in tracer.spans]
+    assert phases == [LLM, RET, "retrieve_delay", LLM, RET, "retrieve_delay", LLM, TOOL, LLM]
     rets = [s for s in tracer.spans if s.phase == RET]
-    assert [s.meta["injected_delay_s"] for s in rets] == [0.05, 0.1]   # agent steps 0 and 1
-    for s in rets:
-        assert s.duration_s >= s.meta["injected_delay_s"]
-        assert s.meta["search_s"] < s.duration_s
+    delays = [s for s in tracer.spans if s.phase == "retrieve_delay"]
+    assert [s.meta["delay_s"] for s in delays] == [0.05, 0.1]   # agent steps 0 and 1
+    assert all(d.duration_s >= d.meta["delay_s"] for d in delays)
+    assert all(r.end_ts <= d.start_ts + 0.01 for r, d in zip(rets, delays))   # search, then the delay

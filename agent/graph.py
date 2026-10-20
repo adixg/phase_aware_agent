@@ -72,7 +72,8 @@ class LangGraphReActAgent:
         self.retriever = retriever
         self.max_steps = max_steps
         self.top_k = top_k   # passages per retrieve; one bad top hit derails multi-hop questions
-        # step -> seconds of emulated backend latency added inside each RETRIEVE span (agent.delay)
+        # step -> seconds of emulated search-backend latency (agent.delay), traced as a
+        # RETRIEVE_DELAY span right after the RETRIEVE span of the real search
         self.retrieve_delay = retrieve_delay
         # Pools shared across jobs (see _slot): K retrieval workers, held for the search plus
         # injected delay, and M LLM slots, held for one generation. None = unlimited.
@@ -155,18 +156,18 @@ class LangGraphReActAgent:
 
         def retrieve(state: AgentState) -> dict:
             step, arg = state["step"], state["arg"]
-            with _slot(tracer, self.retrieve_slots, "retrieve_slot", step), \
-                    tracer.phase(Phase.RETRIEVE, step=step, query=arg) as meta:
-                t0 = time.perf_counter()
-                hits = self.retriever.retrieve(arg, top_k=self.top_k)
-                meta["search_s"] = time.perf_counter() - t0
+            # The worker slot covers the real search and the emulated backend latency;
+            # each gets its own span, so measured and injected time never mix.
+            with _slot(tracer, self.retrieve_slots, "retrieve_slot", step):
+                with tracer.phase(Phase.RETRIEVE, step=step, query=arg) as meta:
+                    hits = self.retriever.retrieve(arg, top_k=self.top_k)
+                    meta["top_doc"] = hits[0].doc_id if hits else None
+                    meta["score"] = hits[0].score if hits else 0.0
+                    meta["doc_ids"] = [h.doc_id for h in hits]
                 if self.retrieve_delay is not None:
                     delay = self.retrieve_delay(step)
-                    time.sleep(delay)
-                    meta["injected_delay_s"] = delay
-                meta["top_doc"] = hits[0].doc_id if hits else None
-                meta["score"] = hits[0].score if hits else 0.0
-                meta["doc_ids"] = [h.doc_id for h in hits]
+                    with tracer.phase(Phase.RETRIEVE_DELAY, step=step, delay_s=delay):
+                        time.sleep(delay)
             observation = "\n".join(f"[{i}] {h.text}" for i, h in enumerate(hits, 1)) if hits else "No results found."
             return {**_observe(state, observation), "searched": state["searched"] + [_norm_query(arg)]}
 
