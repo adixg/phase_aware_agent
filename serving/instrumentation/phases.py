@@ -15,3 +15,5 @@ class Phase(str, Enum):
     RETRIEVE_DELAY = "retrieve_delay"   # emulated search-backend latency after it (--retrieve-delay)
     TOOL_EXEC = "tool_exec"         # non-retrieval tool call (e.g. calculator)
     WAIT = "wait"                   # queued/blocked on a shared resource
+    WAIT_GPU = "wait_gpu"           # queued for an LLM slot (--llm-slots), before LLM_GENERATE
+    WAIT_CPU = "wait_cpu"           # queued for a retrieval worker (--retrieve-workers), before RETRIEVE

@@ -3,7 +3,7 @@
 Agent traces show each job's side; this shows the server's: how many requests
 are running vs queued, KV-cache occupancy, prefix-cache hits and preemptions
 (vLLM evicting a running request's KV cache under memory pressure). Samples go
-to one JSONL file per run, on the same time.time() clock as the trace spans:
+to one JSONL file per run, on the same clock (instrumentation.clock.now) as the trace spans:
 
     {"ts": 1791676005.9, "metrics": {"vllm:num_requests_running": 7.0, ...}}
 
@@ -16,9 +16,10 @@ from __future__ import annotations
 
 import json
 import threading
-import time
 import urllib.request
 from pathlib import Path
+
+from serving.instrumentation.clock import now
 
 # Substrings of the metric names worth keeping; names drift across vLLM versions
 # (gpu_cache_usage_perc became kv_cache_usage_perc), so match loosely.
@@ -67,7 +68,7 @@ class MetricsPoller:
     def _run(self) -> None:
         with self.out_path.open("w") as f:
             while True:
-                ts = time.time()
+                ts = now()
                 try:
                     with urllib.request.urlopen(self.url, timeout=5) as r:
                         metrics = parse_metrics(r.read().decode())
@@ -76,5 +77,5 @@ class MetricsPoller:
                     self.samples += 1
                 except OSError:
                     self.errors += 1   # a missed sample is not worth failing the run over
-                if self._stop.wait(max(0.0, self.interval_s - (time.time() - ts))):
+                if self._stop.wait(max(0.0, self.interval_s - (now() - ts))):
                     return

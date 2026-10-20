@@ -53,6 +53,7 @@ from agent.llm_backend import MockLLM, VLLMBackend, react_system_prompt
 from agent.retriever import DEFAULT_MODEL, EmbeddingRetriever, LocalRetriever, SentenceTransformerEmbedder
 from agent.run_one import mock_script, run_one
 from agent.workloads import get_workload, pool_documents
+from serving.instrumentation.clock import now
 from serving.instrumentation.vllm_metrics import MetricsPoller
 
 
@@ -226,7 +227,7 @@ def main() -> None:
         "arrival_rate": args.arrival_rate,
         "arrival_cv": args.arrival_cv if args.arrival_rate else None,
         "job_order": "dataset" if args.dataset_order else "shuffled",
-        "started_at": time.time(),
+        "started_at": now(),
         "host": socket.gethostname(),
         "gpu": gpu_name(),
         "git_commit": git_commit(),
@@ -269,7 +270,7 @@ def main() -> None:
         job_id = task.task_id.replace("/", "_")
         llm = backend if args.llm == "vllm" else MockLLM(mock_script(task))
         delay = job_delay(delay_sampler, args.seed, job_id) if delay_sampler else None
-        t0 = time.time()
+        t0 = now()
         try:
             res = run_one(task, run_dir / f"{job_id}.jsonl", workload=workload, job_id=job_id,
                           llm=llm, retriever=retriever, max_steps=args.max_steps, retrieve_delay=delay,
@@ -278,7 +279,7 @@ def main() -> None:
         except Exception as e:
             entry = {"job_id": job_id, "error": f"{type(e).__name__}: {e}"}
             traceback.print_exc()
-        t1 = time.time()
+        t1 = now()
         entry.update(start_ts=t0, end_ts=t1, wall_s=round(t1 - t0, 3))
         if arrival_ts is not None:   # open loop: completion time counts from arrival
             entry.update(arrival_ts=arrival_ts, jct_s=round(t1 - arrival_ts, 3))
@@ -293,11 +294,11 @@ def main() -> None:
         if args.arrival_rate:
             # gamma gaps with mean 1/R and the given CV (shape 1/CV^2); CV 1 = exponential = Poisson
             rng, shape = random.Random(f"{args.seed}:arrivals"), 1 / args.arrival_cv ** 2
-            t0, offset = time.time(), 0.0
+            t0, offset = now(), 0.0
             with ThreadPoolExecutor(max_workers=len(tasks)) as pool_:   # a thread per job: no cap
                 futures = []
                 for task in tasks:
-                    time.sleep(max(0.0, t0 + offset - time.time()))
+                    time.sleep(max(0.0, t0 + offset - now()))
                     futures.append(pool_.submit(run_job, task, t0 + offset))
                     offset += rng.gammavariate(shape, 1 / (args.arrival_rate * shape))
                 for f in futures:
@@ -315,7 +316,7 @@ def main() -> None:
             manifest["metrics_errors"] = poller.errors
 
     jobs = manifest["jobs"]
-    manifest["finished_at"] = time.time()
+    manifest["finished_at"] = now()
     manifest["num_succeeded"] = sum(1 for j in jobs if j.get("success"))
     manifest["num_correct"] = sum(1 for j in jobs if j.get("correct"))
     manifest["num_errors"] = sum(1 for j in jobs if "error" in j)

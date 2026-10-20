@@ -90,8 +90,7 @@ def test_trace_uses_server_usage(server, stream):
     assert [s.meta["cached_tokens"] for s in llm_spans] == [0, 50]
     if stream:
         assert all(s.meta["ttft_s"] >= 0.1 and s.meta["decode_s"] > 0 for s in llm_spans)
-        # span: time.time(), backend: perf_counter(); allow for the clocks disagreeing slightly
-        assert all(s.meta["ttft_s"] + s.meta["decode_s"] <= s.duration_s + 0.01 for s in llm_spans)
+        assert all(s.meta["ttft_s"] + s.meta["decode_s"] <= s.duration_s for s in llm_spans)
     else:
         assert all("ttft_s" not in s.meta for s in llm_spans)
 

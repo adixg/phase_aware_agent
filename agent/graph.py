@@ -40,13 +40,13 @@ def _norm_query(q: str) -> str:
 
 
 @contextmanager
-def _slot(tracer: Tracer, slots: threading.Semaphore | None, resource: str, step: int):
+def _slot(tracer: Tracer, slots: threading.Semaphore | None, wait_phase: Phase, resource: str, step: int):
     """Hold one of a shared pool's slots for the block. Time spent waiting for it is a
-    WAIT span (meta.resource says which pool), so queueing stays apart from service time."""
+    `wait_phase` span (WAIT_GPU / WAIT_CPU), so queueing stays apart from service time."""
     if slots is None:
         yield
         return
-    with tracer.phase(Phase.WAIT, step=step, resource=resource):
+    with tracer.phase(wait_phase, step=step, resource=resource):
         slots.acquire()
     try:
         yield
@@ -111,7 +111,7 @@ class LangGraphReActAgent:
             last_step = step == self.max_steps - 1
             if last_step:  # prompt-only: the note never enters the transcript
                 prompt += "\n" + LAST_STEP_NOTE
-            with _slot(tracer, self.llm_slots, "llm_slot", step), \
+            with _slot(tracer, self.llm_slots, Phase.WAIT_GPU, "llm_slot", step), \
                     tracer.phase(Phase.LLM_GENERATE, step=step) as meta:
                 if last_step:
                     meta["last_step_note"] = True
@@ -158,7 +158,7 @@ class LangGraphReActAgent:
             step, arg = state["step"], state["arg"]
             # The worker slot covers the real search and the emulated backend latency;
             # each gets its own span, so measured and injected time never mix.
-            with _slot(tracer, self.retrieve_slots, "retrieve_slot", step):
+            with _slot(tracer, self.retrieve_slots, Phase.WAIT_CPU, "retrieve_slot", step):
                 with tracer.phase(Phase.RETRIEVE, step=step, query=arg) as meta:
                     hits = self.retriever.retrieve(arg, top_k=self.top_k)
                     meta["top_doc"] = hits[0].doc_id if hits else None

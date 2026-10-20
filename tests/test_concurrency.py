@@ -14,9 +14,6 @@ from serving.instrumentation.vllm_metrics import MetricsPoller, parse_metrics
 from test_workloads import _write_fixtures
 
 ROOT = Path(__file__).resolve().parent.parent
-# Span times are time.time(); WSL's clock can step back a few ms, so "A ends before B
-# starts" checks allow this much overlap.
-CLOCK_SLACK = 0.01
 
 
 @pytest.mark.parametrize("spec", ["0.25", "uniform:0.1,0.4", "lognormal:0.3,0.8"])
@@ -121,7 +118,7 @@ def test_concurrency_one_is_serial(tmp_path):
     manifest, traces = _run_slice(tmp_path)
     assert manifest["mode"] == "serial" and manifest["retrieve_delay"] is None
     ends = sorted((rows[-1]["start_ts"], rows[-1]["end_ts"]) for rows in traces.values())
-    assert all(b[0] >= a[1] - CLOCK_SLACK for a, b in zip(ends, ends[1:]))
+    assert all(b[0] >= a[1] for a, b in zip(ends, ends[1:]))
     assert not any(r["phase"] == "retrieve_delay" for rows in traces.values() for r in rows[:-1])
 
 
@@ -131,8 +128,8 @@ def test_retrieve_workers_cap_overlapping_retrieves(tmp_path):
     assert manifest["retrieve_workers"] == 1 and manifest["num_errors"] == 0
     spans = [r for rows in traces.values() for r in rows[:-1]]
     rets = sorted((r["start_ts"], r["end_ts"]) for r in spans if r["phase"] == "retrieve")
-    waits = [r for r in spans if r["phase"] == "wait"]
-    assert all(b[0] >= a[1] - CLOCK_SLACK for a, b in zip(rets, rets[1:]))   # one worker: retrieves never overlap
+    waits = [r for r in spans if r["phase"] == "wait_cpu"]
+    assert all(b[0] >= a[1] for a, b in zip(rets, rets[1:]))   # one worker: retrieves never overlap
     assert len(waits) == len(rets) and all(w["meta"]["resource"] == "retrieve_slot" for w in waits)
     assert max(w["duration_s"] for w in waits) > 0.1           # 3 jobs on 1 worker: someone queued
 
@@ -142,8 +139,8 @@ def test_llm_slots_cap_overlapping_generations(tmp_path):
     assert manifest["llm_slots"] == 1 and manifest["num_errors"] == 0
     spans = [r for rows in traces.values() for r in rows[:-1]]
     gens = sorted((r["start_ts"], r["end_ts"]) for r in spans if r["phase"] == "llm_generate")
-    waits = [r for r in spans if r["phase"] == "wait"]
-    assert all(b[0] >= a[1] - CLOCK_SLACK for a, b in zip(gens, gens[1:]))   # one slot: generations never overlap
+    waits = [r for r in spans if r["phase"] == "wait_gpu"]
+    assert all(b[0] >= a[1] for a, b in zip(gens, gens[1:]))   # one slot: generations never overlap
     assert len(waits) == len(gens) and {w["meta"]["resource"] for w in waits} == {"llm_slot"}
 
 
@@ -170,3 +167,15 @@ def test_open_loop_arrivals_are_seeded(tmp_path):
         arr = sorted(j["arrival_ts"] for j in manifest["jobs"])
         gaps.append([round(y - x, 2) for x, y in zip(arr, arr[1:])])
     assert gaps[0] == gaps[1]
+
+
+def test_gpu_and_cpu_waits_are_told_apart(tmp_path):
+    _, traces = _run_slice(tmp_path, "--concurrency", "3", "--llm-slots", "1", "--retrieve-workers", "1")
+    for rows in traces.values():
+        spans = rows[:-1]
+        for wait, nxt in zip(spans, spans[1:]):   # each wait sits right before what it waited for
+            if wait["phase"] in ("wait_gpu", "wait_cpu"):
+                assert nxt["phase"] == {"wait_gpu": "llm_generate", "wait_cpu": "retrieve"}[wait["phase"]]
+        assert "wait" not in {r["phase"] for r in spans}
+    phases = {r["phase"] for rows in traces.values() for r in rows[:-1]}
+    assert {"wait_gpu", "wait_cpu"} <= phases

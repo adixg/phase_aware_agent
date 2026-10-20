@@ -10,11 +10,12 @@ builds on. Keep it stable; add fields, don't rename them.
 from __future__ import annotations
 
 import json
-import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Any, Iterator
+
+from serving.instrumentation.clock import now
 
 
 @dataclass
@@ -35,7 +36,7 @@ class Tracer:
         self.job_id = job_id
         self.spans: list[Span] = []
         self._step = 0
-        self._job_start = time.time()
+        self._job_start = now()
 
     @contextmanager
     def phase(self, phase: str, **meta: Any) -> Iterator[dict[str, Any]]:
@@ -44,11 +45,11 @@ class Tracer:
         runs (e.g. output token count)."""
         step = self._step
         self._step += 1
-        t0 = time.time()
+        t0 = now()
         try:
             yield meta
         finally:
-            t1 = time.time()
+            t1 = now()
             self.spans.append(
                 Span(
                     job_id=self.job_id,
@@ -64,7 +65,7 @@ class Tracer:
     def write(self, out_path: str | Path, *, success: bool, extra: dict[str, Any] | None = None) -> None:
         out_path = Path(out_path)
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        job_end = time.time()
+        job_end = now()
         summary = {
             "record_type": "job_summary",
             "job_id": self.job_id,

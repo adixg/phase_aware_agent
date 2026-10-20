@@ -131,4 +131,4 @@ def test_retrieve_delay_is_its_own_span_after_the_search():
     delays = [s for s in tracer.spans if s.phase == "retrieve_delay"]
     assert [s.meta["delay_s"] for s in delays] == [0.05, 0.1]   # agent steps 0 and 1
     assert all(d.duration_s >= d.meta["delay_s"] for d in delays)
-    assert all(r.end_ts <= d.start_ts + 0.01 for r, d in zip(rets, delays))   # search, then the delay
+    assert all(r.end_ts <= d.start_ts for r, d in zip(rets, delays))   # search, then the delay
