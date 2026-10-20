@@ -103,6 +103,8 @@ def run_label(args, model: str | None, num_tasks: int) -> str:
     parts = [name, f"{args.tasks}{num_tasks}", arrivals, delay, retriever]
     if args.retrieve_workers:
         parts.insert(4, f"w{args.retrieve_workers}")
+    if args.top_k != 3:
+        parts.insert(4, f"k{args.top_k}")
     if args.llm_slots:
         parts.insert(4, f"llm{args.llm_slots}")
     if args.repetition_penalty != 1.0:
@@ -144,6 +146,11 @@ def main() -> None:
     p.add_argument("--no-thinking", action="store_true",
                    help="turn off a hybrid model's <think> block (Qwen3: enable_thinking=False)")
     p.add_argument("--retriever", choices=["bow", "embedding"], default="bow")
+    p.add_argument("--top-k", type=int, default=3,
+                   help="passages per retrieve (~150 tokens each): the observation-size knob. Every "
+                        "observation stays in the transcript, so prompts and KV cache grow ~K*150 "
+                        "tokens per retrieval; a job whose prompt outgrows the context window ends "
+                        "unanswered (llm span meta.context_overflow)")
     p.add_argument("--embedding-model", default=DEFAULT_MODEL)
     p.add_argument("--embedding-device", choices=["cpu", "cuda"], default="cpu",
                    help="where query/passage embedding runs; cpu keeps it off the vLLM GPU")
@@ -179,6 +186,8 @@ def main() -> None:
         p.error("--arrival-rate must be > 0, and replaces --concurrency (open vs closed loop)")
     if args.arrival_cv <= 0:
         p.error("--arrival-cv must be > 0")
+    if args.top_k < 1:
+        p.error("--top-k must be >= 1")
     if args.retrieve_workers < 0 or args.llm_slots < 0:
         p.error("--retrieve-workers and --llm-slots must be >= 0")
     try:
@@ -236,6 +245,7 @@ def main() -> None:
         "decoding": backend.decoding if args.llm == "vllm" else None,
         "task_set": args.tasks,
         "retrieve_delay": args.retrieve_delay,
+        "top_k": args.top_k,
         "retrieve_workers": args.retrieve_workers or None,
         "llm_slots": args.llm_slots or None,
         "embedding_device": embedding_device,
@@ -273,8 +283,8 @@ def main() -> None:
         t0 = now()
         try:
             res = run_one(task, run_dir / f"{job_id}.jsonl", workload=workload, job_id=job_id,
-                          llm=llm, retriever=retriever, max_steps=args.max_steps, retrieve_delay=delay,
-                          retrieve_slots=slots, llm_slots=llm_slots)
+                          llm=llm, retriever=retriever, max_steps=args.max_steps, top_k=args.top_k,
+                          retrieve_delay=delay, retrieve_slots=slots, llm_slots=llm_slots)
             entry = {k: res[k] for k in ("job_id", "success", "correct", "answer")}
         except Exception as e:
             entry = {"job_id": job_id, "error": f"{type(e).__name__}: {e}"}

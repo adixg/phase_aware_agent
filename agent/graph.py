@@ -17,7 +17,7 @@ from typing import Callable, Optional, TypedDict
 from langgraph.graph import END, StateGraph
 
 from agent.common import _ACTION_RE, AgentResult, _safe_eval
-from agent.llm_backend import LAST_STEP_NOTE, Generation, LLMBackend
+from agent.llm_backend import LAST_STEP_NOTE, ContextOverflow, Generation, LLMBackend
 from agent.retriever import LocalRetriever
 from serving.instrumentation.phases import Phase
 from serving.instrumentation.tracer import Tracer
@@ -115,7 +115,14 @@ class LangGraphReActAgent:
                     tracer.phase(Phase.LLM_GENERATE, step=step) as meta:
                 if last_step:
                     meta["last_step_note"] = True
-                out = self.llm.generate(prompt, step)
+                try:
+                    out = self.llm.generate(prompt, step)
+                except ContextOverflow as e:
+                    # Observations piled up past the context window (large --top-k): the
+                    # job ends here, unanswered, with its trace intact.
+                    meta["context_overflow"] = True
+                    meta["error"] = str(e)
+                    out = ""
                 if isinstance(out, Generation):
                     text = out.text
                     meta["prompt_tokens"] = out.prompt_tokens
@@ -149,6 +156,7 @@ class LangGraphReActAgent:
             return {"transcript": state["transcript"] + [turn], "tool": tool, "arg": arg, "repeat": repeat}
 
         def parse_error(state: AgentState) -> dict:
+            # also reached after a ContextOverflow (empty output, no action)
             return {"transcript": state["transcript"] + ["Observation: could not parse an action; stopping."]}
 
         def finish(state: AgentState) -> dict:

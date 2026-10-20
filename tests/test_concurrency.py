@@ -178,3 +178,10 @@ def test_gpu_and_cpu_waits_are_told_apart(tmp_path):
         assert "wait" not in {r["phase"] for r in spans}
     phases = {r["phase"] for rows in traces.values() for r in rows[:-1]}
     assert {"wait_gpu", "wait_cpu"} <= phases
+
+
+def test_top_k_sets_passages_per_retrieve(tmp_path):
+    manifest, traces = _run_slice(tmp_path, "--top-k", "2")
+    assert manifest["top_k"] == 2
+    rets = [r for rows in traces.values() for r in rows[:-1] if r["phase"] == "retrieve"]
+    assert rets and all(len(r["meta"]["doc_ids"]) == 2 for r in rets)

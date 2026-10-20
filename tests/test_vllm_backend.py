@@ -9,7 +9,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import pytest
 
 from agent.graph import LangGraphReActAgent
-from agent.llm_backend import REACT_SYSTEM_PROMPT, VLLMBackend, react_system_prompt
+from agent.llm_backend import REACT_SYSTEM_PROMPT, ContextOverflow, VLLMBackend, react_system_prompt
 from agent.retriever import LocalRetriever
 from agent.workloads import Document
 from serving.instrumentation.tracer import Tracer
@@ -41,6 +41,15 @@ def server():
             req = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
             requests.append(req)
             n = len(requests)
+            if "TOO LONG" in req["messages"][1]["content"]:   # vLLM's reply to an over-long prompt
+                body = json.dumps({"object": "error", "code": 400, "message":
+                                   "This model's maximum context length is 32768 tokens. However, "
+                                   "you requested 40000 tokens."}).encode()
+                self.send_response(400)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             usage = {"prompt_tokens": 100 * n, "completion_tokens": 7 * n,
                      "prompt_tokens_details": {"cached_tokens": 50 * (n - 1)}}
             if not req.get("stream"):
@@ -114,3 +123,16 @@ def test_tool_list_and_chat_template_kwargs(server):
     backend.generate("Question: q", 0)
     assert requests[0]["messages"][0]["content"] == prompt
     assert requests[0]["chat_template_kwargs"] == {"enable_thinking": False}
+
+
+def test_context_overflow_ends_the_job_with_its_trace(server):
+    base_url, _ = server
+    backend = VLLMBackend("stub-model", base_url=base_url)
+    with pytest.raises(ContextOverflow, match="maximum context length"):
+        backend.generate("Question: TOO LONG", 0)
+    agent = LangGraphReActAgent(backend, LocalRetriever.from_documents(DOCS))
+    tracer = Tracer("job")
+    result = agent.run("job", "TOO LONG", tracer)
+    assert not result.success and result.answer is None
+    [span] = tracer.spans
+    assert span.phase == "llm_generate" and span.meta["context_overflow"] is True

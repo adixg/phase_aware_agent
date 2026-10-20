@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import random
 import time
+import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -32,6 +33,10 @@ class Generation:
     # queued inside the server + prefill), and first token -> last (decode).
     ttft_s: float | None = None
     decode_s: float | None = None
+
+
+class ContextOverflow(Exception):
+    """The prompt plus max_tokens no longer fits the model's context window."""
 
 
 class LLMBackend(ABC):
@@ -200,7 +205,15 @@ class VLLMBackend(LLMBackend):
         )
         ttft_s = decode_s = None
         t0 = time.perf_counter()
-        with urllib.request.urlopen(req, timeout=self.timeout_s) as r:
+        try:
+            r = urllib.request.urlopen(req, timeout=self.timeout_s)
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode(errors="replace")
+            # vLLM rejects an over-long prompt with a 400 naming the context/model length
+            if e.code == 400 and ("context length" in detail or "model length" in detail):
+                raise ContextOverflow(detail[:500]) from e
+            raise
+        with r:
             if self.stream:
                 pieces, usage, t_first = [], {}, None
                 for raw in r:   # server-sent events: "data: {json}" lines, then "data: [DONE]"
