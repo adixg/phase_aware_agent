@@ -1,0 +1,9 @@
+session_id,provider,selection_reason,round_count,tool_call_count,tool_type_count,tool_names,max_tools_per_round,overlapping_pair_count,missing_result_timestamp_count,observed_start_utc,observed_end_utc,observed_span_seconds
+session_01,claude,short,3,2,1,Bash,1,0,0,2026-05-18T13:06:53.361000Z,2026-05-18T13:08:07.985000Z,74.624
+session_02,claude,longer,120,106,4,Bash|Edit|Read|Write,1,0,0,2026-06-23T23:58:03.559000Z,2026-06-24T01:38:46.096000Z,6042.537
+session_03,claude,tool_diverse,30,46,11,Agent|AskUserQuestion|Bash|EnterPlanMode|ExitPlanMode|Glob|Grep|Read|TaskCreate|TaskUpdate|Write,8,3,0,2026-03-02T20:14:30.147000Z,2026-03-02T21:05:58.251000Z,3088.104
+session_04,claude,overlapping_calls,8,38,3,Bash|Read|Write,15,48,0,2026-05-31T02:31:06.925000Z,2026-05-31T02:51:31.782000Z,1224.857
+session_05,codex,short,3,2,1,shell_command,1,0,0,2026-01-10T19:21:27.262000Z,2026-01-10T19:22:25.738000Z,58.476
+session_06,codex,longer,119,258,2,exec_command|write_stdin,4,237,0,2026-07-19T22:56:12.982000Z,2026-07-19T23:45:39.344000Z,2966.362
+session_07,codex,tool_diverse,29,41,8,custom_tool_37|custom_tool_38|custom_tool_39|custom_tool_40|custom_tool_41|custom_tool_42|exec_command|write_stdin,6,30,0,2026-07-22T15:37:26.258000Z,2026-07-22T15:50:32.470000Z,786.212
+session_08,codex,overlapping_calls,14,44,2,exec_command|update_plan,12,130,0,2026-04-10T03:24:47.285000Z,2026-04-10T03:32:52.921000Z,485.636
