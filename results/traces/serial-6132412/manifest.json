@@ -1,0 +1,173 @@
+{
+  "run_id": "serial-6132412",
+  "mode": "serial",
+  "started_at": 1791582654.8791769,
+  "host": "atl1-1-03-007-35-0.pace.gatech.edu",
+  "gpu": "NVIDIA A100-PCIE-40GB",
+  "git_commit": "bbfb001",
+  "llm": "vllm",
+  "model": "meta-llama/Llama-3.1-8B-Instruct",
+  "args": {
+    "data_dir": null,
+    "seed": 0,
+    "limit": 20,
+    "llm": "vllm",
+    "base_url": "http://localhost:8000/v1",
+    "model": null,
+    "max_tokens": 256,
+    "max_steps": 10,
+    "no_thinking": false,
+    "retriever": "embedding",
+    "embedding_model": "BAAI/bge-small-en-v1.5",
+    "run_id": "serial-6132412",
+    "out_dir": "/tmp"
+  },
+  "num_tasks": 20,
+  "corpus_docs": 251,
+  "jobs": [
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_197",
+      "success": true,
+      "correct": true,
+      "answer": "York, Pennsylvania",
+      "wall_s": 5.094
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_388",
+      "success": true,
+      "correct": false,
+      "answer": "11,928",
+      "wall_s": 4.922
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_456",
+      "success": true,
+      "correct": true,
+      "answer": "Fast Five",
+      "wall_s": 2.473
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_155",
+      "success": true,
+      "correct": false,
+      "answer": "140 pounds",
+      "wall_s": 5.145
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_244",
+      "success": true,
+      "correct": false,
+      "answer": "November 1992",
+      "wall_s": 8.699
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_248",
+      "success": true,
+      "correct": true,
+      "answer": "Blu-ray Disc",
+      "wall_s": 2.325
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_298",
+      "success": true,
+      "correct": false,
+      "answer": "lieutenant-colonel",
+      "wall_s": 3.097
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_386",
+      "success": true,
+      "correct": true,
+      "answer": "Radcliffe College",
+      "wall_s": 2.357
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_66",
+      "success": false,
+      "correct": false,
+      "answer": null,
+      "wall_s": 7.606
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_98",
+      "success": true,
+      "correct": false,
+      "answer": "Quadricentennial Pavilion",
+      "wall_s": 2.278
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_107",
+      "success": true,
+      "correct": false,
+      "answer": "East Vietnam Sea",
+      "wall_s": 6.865
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_124",
+      "success": true,
+      "correct": true,
+      "answer": "29 March 1964",
+      "wall_s": 4.732
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_33",
+      "success": true,
+      "correct": true,
+      "answer": "Cliviger",
+      "wall_s": 5.543
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_38",
+      "success": true,
+      "correct": false,
+      "answer": "Unknown",
+      "wall_s": 3.847
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_49",
+      "success": true,
+      "correct": true,
+      "answer": "Annie",
+      "wall_s": 4.316
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_51",
+      "success": true,
+      "correct": true,
+      "answer": "Tsar Nicholas I of Russia",
+      "wall_s": 3.145
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_106",
+      "success": true,
+      "correct": true,
+      "answer": "Patapsco River",
+      "wall_s": 3.677
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_comparison_25",
+      "success": true,
+      "correct": false,
+      "answer": "Carson Iowa county",
+      "wall_s": 3.499
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_inference_61",
+      "success": true,
+      "correct": true,
+      "answer": "6",
+      "wall_s": 6.407
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_inference_62",
+      "success": true,
+      "correct": false,
+      "answer": "no event found",
+      "wall_s": 7.289
+    }
+  ],
+  "finished_at": 1791582748.2297046,
+  "num_succeeded": 19,
+  "num_correct": 10,
+  "num_errors": 0
+}

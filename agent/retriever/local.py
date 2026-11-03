@@ -14,7 +14,6 @@ import random
 import re
 from collections import Counter
 from dataclasses import dataclass
-from pathlib import Path
 
 _WORD_RE = re.compile(r"[a-z0-9]+")
 
@@ -39,10 +38,9 @@ class LocalRetriever:
         self._latency_range = simulated_latency_s
 
     @classmethod
-    def from_dir(cls, path: str | Path, **kwargs) -> "LocalRetriever":
-        path = Path(path)
-        corpus = {p.stem: p.read_text() for p in sorted(path.glob("*.txt"))}
-        return cls(corpus, **kwargs)
+    def from_documents(cls, documents, **kwargs) -> "LocalRetriever":
+        """Build from `agent.workloads.Document`s (anything with doc_id/title/text)."""
+        return cls({d.doc_id: f"{d.title}. {d.text}" for d in documents}, **kwargs)
 
     def _cosine(self, a: Counter, b: Counter) -> float:
         if not a or not b:

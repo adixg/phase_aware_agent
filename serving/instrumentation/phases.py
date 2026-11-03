@@ -11,6 +11,7 @@ class Phase(str, Enum):
     """
 
     LLM_GENERATE = "llm_generate"   # prefill+decode: the ReAct "Thought"/"Action" call
-    RETRIEVE = "retrieve"           # local retriever lookup
+    RETRIEVE = "retrieve"           # local retriever lookup (measured)
+    RETRIEVE_DELAY = "retrieve_delay"   # emulated search-backend latency after it (--retrieve-delay)
     TOOL_EXEC = "tool_exec"         # non-retrieval tool call (e.g. calculator)
     WAIT = "wait"                   # queued/blocked on a shared resource
