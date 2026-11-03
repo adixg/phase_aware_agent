@@ -21,7 +21,7 @@ from pathlib import Path
 
 from agent.graph import LangGraphReActAgent
 from agent.llm_backend import LLMBackend, MockLLM
-from agent.retriever import LocalRetriever
+from agent.retriever import DEFAULT_MODEL, EmbeddingRetriever, LocalRetriever, SentenceTransformerEmbedder
 from agent.workloads import WORKLOADS, Task, get_workload, pool_documents
 from serving.instrumentation.tracer import Tracer
 
@@ -46,10 +46,22 @@ def run_one(
     workload,
     job_id: str | None = None,
     llm: LLMBackend | None = None,
+    retriever=None,
+    max_steps: int = 8,
+    retrieve_delay=None,
+    retrieve_slots=None,
+    llm_slots=None,
 ) -> dict:
+    """`retriever` is shared across jobs when given (the 50-100 job runs build it once over
+    the slice corpus); by default each job gets a private one over its own passages.
+    `retrieve_delay` (step -> seconds, see agent.delay) emulates a slower search backend;
+    `retrieve_slots` / `llm_slots` (semaphores shared across jobs) cap how many retrieves /
+    LLM calls run at once; waits for a slot are traced as WAIT spans."""
     job_id = job_id or task.task_id
-    retriever = LocalRetriever.from_documents(pool_documents([task]))
-    agent = LangGraphReActAgent(llm or MockLLM(mock_script(task)), retriever)
+    retriever = retriever or LocalRetriever.from_documents(pool_documents([task]))
+    agent = LangGraphReActAgent(llm or MockLLM(mock_script(task)), retriever, max_steps=max_steps,
+                                retrieve_delay=retrieve_delay,
+                                retrieve_slots=retrieve_slots, llm_slots=llm_slots)
 
     tracer = Tracer(job_id)
     result = agent.run(job_id, task.question, tracer)
@@ -77,17 +89,35 @@ def main() -> None:
     p.add_argument("--index", type=int, default=0, help="which task of the (seeded, limited) sample to run")
     p.add_argument("--limit", type=int, default=None)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--corpus", choices=["task", "slice"], default="task",
+                   help="task: only this task's passages; slice: pooled passages of the reduced slice "
+                        "(agentic_rag_tracer only; --index then picks within the slice, --limit is ignored)")
+    p.add_argument("--retriever", choices=["bow", "embedding"], default="bow")
+    p.add_argument("--embedding-model", default=DEFAULT_MODEL)
     p.add_argument("--job-id", default=None)
     p.add_argument("--out", default=None)
     args = p.parse_args()
 
     workload = get_workload(args.workload, args.data_dir)
-    task = next(islice(workload.tasks(limit=args.limit, seed=args.seed), args.index, None), None)
+    if args.corpus == "slice":
+        if not hasattr(workload, "reduced_slice"):
+            raise SystemExit(f"--corpus slice is not defined for {args.workload}")
+        tasks = workload.reduced_slice(seed=args.seed)
+    else:
+        tasks = workload.tasks(limit=args.limit, seed=args.seed)
+    task = next(islice(tasks, args.index, None), None)
     if task is None:
         raise SystemExit(f"no task at index {args.index}")
+    retriever = None
+    if args.retriever == "embedding" or args.corpus == "slice":
+        docs = pool_documents(tasks if args.corpus == "slice" else [task])
+        if args.retriever == "embedding":
+            retriever = EmbeddingRetriever.from_documents(docs, SentenceTransformerEmbedder(args.embedding_model))
+        else:
+            retriever = LocalRetriever.from_documents(docs)
     job_id = args.job_id or task.task_id.replace("/", "_")
     out = args.out or f"results/traces/{job_id}.jsonl"
-    print(json.dumps(run_one(task, out, workload=workload, job_id=job_id), indent=2))
+    print(json.dumps(run_one(task, out, workload=workload, job_id=job_id, retriever=retriever), indent=2))
 
 
 if __name__ == "__main__":

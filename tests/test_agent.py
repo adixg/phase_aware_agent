@@ -3,7 +3,7 @@
 import pytest
 
 from agent.graph import LangGraphReActAgent
-from agent.llm_backend import DEFAULT_SCRIPT, MockLLM
+from agent.llm_backend import DEFAULT_SCRIPT, LAST_STEP_NOTE, MockLLM
 from agent.retriever import LocalRetriever
 from agent.workloads import Document
 from serving.instrumentation.tracer import Tracer
@@ -36,8 +36,8 @@ def test_default_script_trace_shape():
     assert [s.step for s in spans] == list(range(7))
     assert result.success
     assert result.answer == "The population of Paris, doubled, is approximately 4.2 million."
-    assert sorted(spans[0].meta) == ["output_tokens", "prompt_tokens", "step"]
-    assert sorted(spans[1].meta) == ["query", "score", "step", "top_doc"]
+    assert sorted(spans[0].meta) == ["output_text", "output_tokens", "prompt_tokens", "step"]
+    assert sorted(spans[1].meta) == ["doc_ids", "query", "score", "step", "top_doc"]
     assert sorted(spans[5].meta) == ["expr", "result", "step", "tool"]
 
 
@@ -63,7 +63,72 @@ def test_bad_calculator_input_is_reported_not_raised():
     assert result.success
 
 
+def test_text_after_first_action_stays_out_of_transcript():
+    rambling = ("Thought: look it up.\nAction: retrieve[capital of France]\n\n"
+                "The capital is Lyon.\nAction: finish[Lyon]")
+    result, spans = _run([rambling, "Thought: done.\nAction: finish[Paris]"])
+    assert result.answer == "Paris"
+    assert "Thought: look it up.\nAction: retrieve[capital of France]" in result.transcript
+    assert not any("Lyon" in line for line in result.transcript)
+    assert spans[0].meta["output_text"] == rambling
+
+
 def test_max_steps_caps_the_loop():
+    # NEVER_FINISHES repeats one query: only the first runs, the repeats are blocked
     result, spans = _run(NEVER_FINISHES, max_steps=3)
-    assert [s.phase for s in spans] == [LLM, RET] * 3
+    assert [s.phase for s in spans] == [LLM, RET, LLM, LLM]
     assert not result.success and result.answer is None
+
+
+def test_repeated_search_is_blocked_not_run():
+    script = ["Thought: a.\nAction: retrieve[Capital of  France?]",
+              "Thought: b.\nAction: retrieve[capital of france]",          # same query, normalized
+              "Thought: c.\nAction: retrieve[population of Paris]",
+              "Thought: d.\nAction: finish[Paris]"]
+    result, spans = _run(script)
+    assert [s.phase for s in spans] == [LLM, RET, LLM, LLM, RET, LLM]
+    assert [s.meta.get("repeat_blocked") for s in spans if s.phase == LLM] == [None, True, None, None]
+    assert 'Observation: You already searched for "capital of france". Use different words, or finish with your answer.' in result.transcript
+    assert result.success and result.answer == "Paris"
+
+
+def test_retrieve_returns_numbered_top_k_passages():
+    llm = MockLLM(["Thought: look.\nAction: retrieve[Paris]", "Thought: done.\nAction: finish[ok]"],
+                  tokens_per_second=1e9, jitter_s=(0.0, 0.0))
+    agent = LangGraphReActAgent(llm, LocalRetriever.from_documents(DOCS), top_k=2)
+    tracer = Tracer("job")
+    result = agent.run("job", QUESTION, tracer)
+    observation = result.transcript[2]
+    assert observation.startswith("Observation: [1] ") and "\n[2] " in observation
+    assert len(tracer.spans[1].meta["doc_ids"]) == 2
+
+
+def test_last_step_gets_the_finish_note_in_its_prompt_only():
+    prompts = []
+
+    class Recording(MockLLM):
+        def generate(self, prompt, step):
+            prompts.append(prompt)
+            return super().generate(prompt, step)
+
+    llm = Recording(NEVER_FINISHES, tokens_per_second=1e9, jitter_s=(0.0, 0.0))
+    agent = LangGraphReActAgent(llm, LocalRetriever.from_documents(DOCS), max_steps=3)
+    tracer = Tracer("job")
+    result = agent.run("job", QUESTION, tracer)
+    assert [LAST_STEP_NOTE in p for p in prompts] == [False, False, True]
+    assert not any(LAST_STEP_NOTE in line for line in result.transcript)
+    assert [s.meta.get("last_step_note") for s in tracer.spans if s.phase == LLM] == [None, None, True]
+
+
+def test_retrieve_delay_is_its_own_span_after_the_search():
+    llm = MockLLM(DEFAULT_SCRIPT, tokens_per_second=1e9, jitter_s=(0.0, 0.0))
+    agent = LangGraphReActAgent(llm, LocalRetriever.from_documents(DOCS), retrieve_delay=lambda step: 0.05 * (step + 1))
+    tracer = Tracer("job")
+    agent.run("job", QUESTION, tracer)
+    phases = [s.phase for s in tracer.spans]
+    assert phases == [LLM, RET, "retrieve_delay", LLM, RET, "retrieve_delay", LLM, TOOL, LLM]
+    rets = [s for s in tracer.spans if s.phase == RET]
+    delays = [s for s in tracer.spans if s.phase == "retrieve_delay"]
+    assert [s.meta["delay_s"] for s in delays] == [0.05, 0.1]   # agent steps 0 and 1
+    assert all(d.duration_s >= d.meta["delay_s"] for d in delays)
+    assert all(r.end_ts <= d.start_ts + 0.01 for r, d in zip(rets, delays))   # search, then the delay

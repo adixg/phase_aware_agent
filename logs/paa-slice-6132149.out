@@ -1,0 +1,46 @@
+---------------------------------------
+Begin Slurm Prolog: Oct-09-2026 17:20:43
+Job ID:    6132149
+User ID:   aghosh367
+Account:   coc
+Job name:  paa-slice
+Partition: ice-gpu
+QOS:       coc-ice
+---------------------------------------
+node atl1-1-03-007-35-0.pace.gatech.edu  gpu NVIDIA A100-PCIE-40GB  model meta-llama/Llama-3.1-8B-Instruct (/home/hice1/aghosh367/scratch/hf_cache/hub/models--meta-llama--Llama-3.1-8B-Instruct/snapshots/0e9e39f249a16976918f6564b8830bc894c89659/)
+Loading weights:   0%|          | 0/199 [00:00<?, ?it/s]Loading weights:  17%|█▋        | 34/199 [00:00<00:00, 326.68it/s]Loading weights:  34%|███▎      | 67/199 [00:00<00:00, 220.02it/s]Loading weights:  46%|████▌     | 91/199 [00:00<00:00, 180.32it/s]Loading weights:  57%|█████▋    | 113/199 [00:00<00:00, 189.78it/s]Loading weights:  67%|██████▋   | 134/199 [00:00<00:00, 176.76it/s]Loading weights:  77%|███████▋  | 153/199 [00:00<00:00, 177.44it/s]Loading weights:  88%|████████▊ | 176/199 [00:00<00:00, 187.67it/s]Loading weights:  98%|█████████▊| 196/199 [00:01<00:00, 183.16it/s]Loading weights: 100%|██████████| 199/199 [00:01<00:00, 192.67it/s]
+run serial-6132149: 20 tasks, 251 passages, llm=vllm model=meta-llama/Llama-3.1-8B-Instruct -> /tmp/serial-6132149
+[1/20] agentic_rag_tracer_2hop_comparison_197 4.7s success=True correct=False
+[2/20] agentic_rag_tracer_2hop_comparison_388 1.8s success=True correct=False
+[3/20] agentic_rag_tracer_2hop_comparison_456 3.5s success=True correct=False
+[4/20] agentic_rag_tracer_2hop_inference_155 4.5s success=True correct=True
+[5/20] agentic_rag_tracer_2hop_inference_244 2.2s success=True correct=False
+[6/20] agentic_rag_tracer_2hop_inference_248 1.9s success=True correct=True
+[7/20] agentic_rag_tracer_2hop_inference_298 2.5s success=True correct=False
+[8/20] agentic_rag_tracer_2hop_inference_386 1.6s success=True correct=True
+[9/20] agentic_rag_tracer_3hop_comparison_66 4.8s success=True correct=False
+[10/20] agentic_rag_tracer_3hop_comparison_98 3.1s success=True correct=False
+[11/20] agentic_rag_tracer_3hop_comparison_107 3.3s success=True correct=False
+[12/20] agentic_rag_tracer_3hop_comparison_124 1.5s success=True correct=True
+[13/20] agentic_rag_tracer_3hop_inference_33 4.8s success=True correct=False
+[14/20] agentic_rag_tracer_3hop_inference_38 4.1s success=True correct=True
+[15/20] agentic_rag_tracer_3hop_inference_49 5.3s success=True correct=True
+[16/20] agentic_rag_tracer_3hop_inference_51 6.5s success=True correct=False
+[17/20] agentic_rag_tracer_3hop_inference_106 4.0s success=True correct=True
+[18/20] agentic_rag_tracer_4hop_comparison_25 6.6s success=True correct=False
+[19/20] agentic_rag_tracer_4hop_inference_61 4.4s success=True correct=True
+[20/20] agentic_rag_tracer_4hop_inference_62 7.9s success=True correct=False
+done: 20/20 finished, 8 correct, 0 errors
+traces: results/traces/serial-6132149
+---------------------------------------
+Begin Slurm Epilog: Oct-09-2026 17:27:56
+Job ID:        6132149
+User ID:       aghosh367
+Account:       coc
+Job name:      paa-slice
+Resources:     cpu=8,gres/gpu:a100=1,mem=32G,node=1
+Rsrc Used:     cput=00:57:44,vmem=0,walltime=00:07:13,mem=12202504K,energy_used=0
+Partition:     ice-gpu
+QOS:           coc-ice
+Nodes:         atl1-1-03-007-35-0
+---------------------------------------
