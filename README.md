@@ -22,7 +22,7 @@ python scripts/fetch_workloads.py               # all four
 # or just one: python scripts/fetch_workloads.py hotpotqa
 
 # 4. Verify: run the test suite
-pytest tests
+python -m pytest tests
 
 # 5. Verify: run one traced job per workload
 python -m agent.run_one --workload calculator --index 0

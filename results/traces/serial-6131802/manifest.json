@@ -1,0 +1,170 @@
+{
+  "run_id": "serial-6131802",
+  "mode": "serial",
+  "started_at": 1791579083.3807073,
+  "host": "atl1-1-03-007-35-0.pace.gatech.edu",
+  "git_commit": "aa86cab",
+  "llm": "vllm",
+  "model": "meta-llama/Llama-3.1-8B-Instruct",
+  "args": {
+    "data_dir": null,
+    "seed": 0,
+    "limit": 20,
+    "llm": "vllm",
+    "base_url": "http://localhost:8000/v1",
+    "model": null,
+    "max_tokens": 256,
+    "retriever": "embedding",
+    "embedding_model": "BAAI/bge-small-en-v1.5",
+    "run_id": "serial-6131802",
+    "out_dir": "/tmp"
+  },
+  "num_tasks": 20,
+  "corpus_docs": 251,
+  "jobs": [
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_197",
+      "success": false,
+      "correct": false,
+      "answer": null,
+      "wall_s": 5.446
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_388",
+      "success": true,
+      "correct": true,
+      "answer": "Babylon, New York",
+      "wall_s": 3.76
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_comparison_456",
+      "success": false,
+      "correct": false,
+      "answer": null,
+      "wall_s": 4.274
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_155",
+      "success": true,
+      "correct": false,
+      "answer": "135-140",
+      "wall_s": 1.953
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_244",
+      "success": true,
+      "correct": false,
+      "answer": "1992",
+      "wall_s": 1.456
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_248",
+      "success": true,
+      "correct": true,
+      "answer": "Blu-ray Disc",
+      "wall_s": 2.831
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_298",
+      "success": true,
+      "correct": false,
+      "answer": "Colonel",
+      "wall_s": 2.038
+    },
+    {
+      "job_id": "agentic_rag_tracer_2hop_inference_386",
+      "success": false,
+      "correct": false,
+      "answer": null,
+      "wall_s": 4.142
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_66",
+      "success": false,
+      "correct": false,
+      "answer": null,
+      "wall_s": 7.613
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_98",
+      "success": true,
+      "correct": false,
+      "answer": "5,792",
+      "wall_s": 2.296
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_107",
+      "success": false,
+      "correct": false,
+      "answer": null,
+      "wall_s": 5.915
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_comparison_124",
+      "success": true,
+      "correct": false,
+      "answer": "USS Aucilla",
+      "wall_s": 2.392
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_33",
+      "success": false,
+      "correct": false,
+      "answer": null,
+      "wall_s": 4.067
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_38",
+      "success": false,
+      "correct": false,
+      "answer": null,
+      "wall_s": 5.216
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_49",
+      "success": false,
+      "correct": false,
+      "answer": null,
+      "wall_s": 4.468
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_51",
+      "success": false,
+      "correct": false,
+      "answer": null,
+      "wall_s": 5.186
+    },
+    {
+      "job_id": "agentic_rag_tracer_3hop_inference_106",
+      "success": true,
+      "correct": false,
+      "answer": "Dundalk River",
+      "wall_s": 2.443
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_comparison_25",
+      "success": false,
+      "correct": false,
+      "answer": null,
+      "wall_s": 4.952
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_inference_61",
+      "success": false,
+      "correct": false,
+      "answer": null,
+      "wall_s": 4.535
+    },
+    {
+      "job_id": "agentic_rag_tracer_4hop_inference_62",
+      "success": false,
+      "correct": false,
+      "answer": null,
+      "wall_s": 4.278
+    }
+  ],
+  "finished_at": 1791579162.7282689,
+  "num_succeeded": 8,
+  "num_correct": 2,
+  "num_errors": 0
+}

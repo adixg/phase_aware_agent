@@ -5,19 +5,40 @@ milestone). It exists so the tracer, phase boundaries, and trace schema can
 be built and validated today, on a laptop, with zero model/GPU dependency.
 Swapping in a real backend later means implementing the same `generate`
 signature -- nothing else in the pipeline should need to change.
+
+`VLLMBackend` talks to a running `vllm serve` over its OpenAI-compatible HTTP
+API and returns a `Generation` carrying the server's real token counts.
 """
 
 from __future__ import annotations
 
+import json
 import random
 import time
+import urllib.request
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
+
+@dataclass
+class Generation:
+    """One ReAct turn plus the usage the serving engine reported for it."""
+
+    text: str
+    prompt_tokens: int
+    output_tokens: int
+    cached_tokens: int | None = None   # prefix-cache hits, when the server reports them
+    # Streamed requests only, measured client side: request sent -> first token (time
+    # queued inside the server + prefill), and first token -> last (decode).
+    ttft_s: float | None = None
+    decode_s: float | None = None
 
 
 class LLMBackend(ABC):
     @abstractmethod
-    def generate(self, prompt: str, step: int) -> str:
-        """Return the next ReAct turn's raw text for this step."""
+    def generate(self, prompt: str, step: int) -> str | Generation:
+        """Return the next ReAct turn for this step: a `Generation` with real token
+        counts, or plain text (the agent then falls back to word-count estimates)."""
 
 
 class MockLLM(LLMBackend):
@@ -42,6 +63,174 @@ class MockLLM(LLMBackend):
         decode_s = output_tokens / self.tokens_per_second
         time.sleep(decode_s + random.uniform(*self.jitter_s))
         return text
+
+
+TOOL_DOCS = {
+    "retrieve": "retrieve[query]: search a collection of Wikipedia passages; returns the best-matching passages, numbered.",
+    "calculator": "calculator[expression]: evaluate arithmetic with + - * / and parentheses.",
+    "finish": "finish[answer]: give the final answer and stop. Answer with a short entity, date, or number.",
+}
+
+
+def react_system_prompt(tools: tuple[str, ...] = ("retrieve", "calculator", "finish")) -> str:
+    """ReAct instructions offering only `tools` (keys of TOOL_DOCS). Drop tools a
+    workload never needs: a model offered a calculator it has no use for tends to
+    call it in a loop instead of answering."""
+    tool_lines = "\n".join(f"- {TOOL_DOCS[t]}" for t in tools)
+    return f"""\
+Answer the question by reasoning step by step and using tools.
+Each turn, write exactly one Thought line and one Action line, then stop:
+Thought: <your reasoning>
+Action: <tool>[<input>]
+
+Tools:
+{tool_lines}
+
+After each Action you will see an Observation with the tool's result. Stop right after
+the Action line: never write the tool's result, a guess at it, or a second Action
+yourself.
+
+Rules:
+- Most questions need several facts: retrieve one fact at a time, with a short,
+  specific query. Use the question's own wording for the fact you need.
+- If a search does not return what you need, rephrase it with different words.
+  Never repeat an Action you have already taken.
+- As soon as the Observations contain the facts you need, use finish.
+- Answer exactly what the question asks. Before you finish, re-read the question:
+  if it asks for a date, a place or a person, give that, not an intermediate fact.
+- For a "which ..." question that compares options, answer with the name of the
+  option that wins, not the numbers or values you compared.
+- The finish answer must be the answer itself, never a search query or a
+  description of what you were looking for.
+
+Example:
+Question: Who was the father of the director of Jaws?
+Thought: I need to find who directed Jaws.
+Action: retrieve[Jaws film director]
+Observation: [1] Jaws is a 1975 American thriller film directed by Steven Spielberg.
+Thought: Jaws was directed by Steven Spielberg. Now I need his father.
+Action: retrieve[Steven Spielberg father]
+Observation: [1] Spielberg was born in Cincinnati to Arnold Spielberg, an electrical engineer.
+Thought: The question asks for the father of the director, Steven Spielberg: Arnold Spielberg.
+Action: finish[Arnold Spielberg]"""
+
+
+REACT_SYSTEM_PROMPT = react_system_prompt()
+
+# Appended to the prompt of a job's last allowed step, so the job ends with a
+# best-effort answer instead of being cut off mid-search.
+LAST_STEP_NOTE = ("This is your last step. Use finish now, with your best answer from the "
+                  "Observations so far.")
+
+
+class VLLMBackend(LLMBackend):
+    """Chat-completions client for `vllm serve` (any OpenAI-compatible server).
+
+    The ReAct transcript so far is the user message; generation stops before the
+    model can invent its own Observation. Greedy decoding by default, so reruns
+    of a job follow the same trajectory.
+    """
+
+    def __init__(
+        self,
+        model: str,
+        *,
+        base_url: str = "http://localhost:8000/v1",
+        max_tokens: int = 256,
+        temperature: float = 0.0,
+        repetition_penalty: float = 1.0,
+        timeout_s: float = 600.0,
+        system_prompt: str = REACT_SYSTEM_PROMPT,
+        chat_template_kwargs: dict | None = None,
+        stream: bool = True,
+    ):
+        self.model = model
+        self.base_url = base_url.rstrip("/")
+        self.max_tokens = max_tokens
+        self.temperature = temperature
+        self.repetition_penalty = repetition_penalty
+        self.timeout_s = timeout_s
+        self.system_prompt = system_prompt
+        # e.g. {"enable_thinking": False} for Qwen3, so it answers without a <think> block
+        self.chat_template_kwargs = chat_template_kwargs
+        # Streaming changes no tokens; it lets each call's time be split into
+        # server-side queueing + prefill (ttft_s) and decode (decode_s).
+        self.stream = stream
+
+    @property
+    def decoding(self) -> dict:
+        """Every sampling parameter, sent on each request so the server's (or the
+        model's generation_config.json) defaults can't change decoding unseen.
+        top_k=-1 / top_p=1.0 are vLLM's "off"; under temperature 0 they are moot."""
+        return {
+            "temperature": self.temperature,
+            "top_p": 1.0,
+            "top_k": -1,
+            "repetition_penalty": self.repetition_penalty,
+            "presence_penalty": 0.0,
+            "frequency_penalty": 0.0,
+            "max_tokens": self.max_tokens,
+            "stop": ["Observation:"],
+        }
+
+    @staticmethod
+    def served_model(base_url: str = "http://localhost:8000/v1") -> str:
+        """Name of the (first) model the server is serving."""
+        with urllib.request.urlopen(f"{base_url.rstrip('/')}/models", timeout=30) as r:
+            return json.load(r)["data"][0]["id"]
+
+    def generate(self, prompt: str, step: int) -> Generation:
+        body = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": prompt},
+            ],
+            **self.decoding,
+        }
+        if self.chat_template_kwargs:
+            body["chat_template_kwargs"] = self.chat_template_kwargs
+        if self.stream:
+            body["stream"] = True
+            body["stream_options"] = {"include_usage": True}   # final chunk carries the usage
+        req = urllib.request.Request(
+            f"{self.base_url}/chat/completions",
+            data=json.dumps(body).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        ttft_s = decode_s = None
+        t0 = time.perf_counter()
+        with urllib.request.urlopen(req, timeout=self.timeout_s) as r:
+            if self.stream:
+                pieces, usage, t_first = [], {}, None
+                for raw in r:   # server-sent events: "data: {json}" lines, then "data: [DONE]"
+                    line = raw.decode().strip()
+                    if not line.startswith("data:") or line == "data: [DONE]":
+                        continue
+                    chunk = json.loads(line[5:])
+                    usage = chunk.get("usage") or usage
+                    for choice in chunk.get("choices") or []:
+                        piece = (choice.get("delta") or {}).get("content")
+                        if piece:
+                            if t_first is None:
+                                t_first = time.perf_counter()
+                            pieces.append(piece)
+                text = "".join(pieces)
+                if t_first is not None:
+                    ttft_s, decode_s = t_first - t0, time.perf_counter() - t_first
+            else:
+                out = json.load(r)
+                usage = out.get("usage") or {}
+                text = out["choices"][0]["message"]["content"] or ""
+        details = usage.get("prompt_tokens_details") or {}
+        return Generation(
+            text=text.strip(),
+            prompt_tokens=usage.get("prompt_tokens", 0),
+            output_tokens=usage.get("completion_tokens", 0),
+            cached_tokens=details.get("cached_tokens"),
+            ttft_s=ttft_s,
+            decode_s=decode_s,
+        )
 
 
 DEFAULT_SCRIPT = [

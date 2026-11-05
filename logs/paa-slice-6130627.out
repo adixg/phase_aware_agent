@@ -1,0 +1,31 @@
+---------------------------------------
+Begin Slurm Prolog: Oct-09-2026 15:30:00
+Job ID:    6130627
+User ID:   aghosh367
+Account:   coc
+Job name:  paa-slice
+Partition: ice-gpu
+QOS:       coc-ice
+---------------------------------------
+
+CondaError: Run 'conda init' before 'conda deactivate'
+
+node atl1-1-03-007-33-0.pace.gatech.edu  gpu NVIDIA A100-PCIE-40GB  model /home/hice1/aghosh367/scratch/hf_cache/hub/models--meta-llama--Llama-3.1-8B-Instruct/snapshots/0e9e39f249a16976918f6564b8830bc894c89659/
+run serial-6130627: 3 tasks, 251 passages, llm=vllm model=/home/hice1/aghosh367/scratch/hf_cache/hub/models--meta-llama--Llama-3.1-8B-Instruct/snapshots/0e9e39f249a16976918f6564b8830bc894c89659/ -> /tmp/serial-6130627
+[1/3] agentic_rag_tracer_3hop_comparison_98 4.4s success=True correct=True
+[2/3] agentic_rag_tracer_3hop_comparison_124 2.3s success=True correct=False
+[3/3] agentic_rag_tracer_4hop_inference_62 17.2s success=False correct=False
+done: 2/3 finished, 1 correct, 0 errors
+traces: results/traces/serial-6130627
+---------------------------------------
+Begin Slurm Epilog: Oct-09-2026 15:33:58
+Job ID:        6130627
+User ID:       aghosh367
+Account:       coc
+Job name:      paa-slice
+Resources:     cpu=8,gres/gpu:a100=1,mem=64G,node=1
+Rsrc Used:     cput=00:31:44,vmem=0,walltime=00:03:58,mem=12418668K,energy_used=0
+Partition:     ice-gpu
+QOS:           coc-ice
+Nodes:         atl1-1-03-007-33-0
+---------------------------------------
