@@ -1,0 +1,6 @@
+{"record_type": "span", "job_id": "job_a", "step": 0, "phase": "llm_generate", "start_ts": 1700000000, "end_ts": 1700000002, "duration_s": 2, "meta": {"step": 0}}
+{"record_type": "span", "job_id": "job_a", "step": 1, "phase": "retrieve", "start_ts": 1700000002, "end_ts": 1700000003, "duration_s": 1, "meta": {"step": 0}}
+{"record_type": "span", "job_id": "job_a", "step": 2, "phase": "llm_generate", "start_ts": 1700000003, "end_ts": 1700000007, "duration_s": 4, "meta": {"step": 1}}
+{"record_type": "span", "job_id": "job_a", "step": 3, "phase": "tool_exec", "start_ts": 1700000007, "end_ts": 1700000008, "duration_s": 1, "meta": {"step": 1}}
+{"record_type": "span", "job_id": "job_a", "step": 4, "phase": "llm_generate", "start_ts": 1700000008, "end_ts": 1700000010, "duration_s": 2, "meta": {"step": 2}}
+{"record_type": "job_summary", "job_id": "job_a", "start_ts": 1700000000, "end_ts": 1700000010, "duration_s": 10, "num_steps": 5, "success": true}

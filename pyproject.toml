@@ -12,7 +12,8 @@ dependencies = ["langgraph>=0.2"]
 [project.optional-dependencies]
 test = ["pytest", "numpy"]
 embedding = ["numpy", "sentence-transformers"]  # agent/retriever/embedding.py
+analysis = ["scipy>=1.9"]
 data = ["pyarrow"]  # only for scripts/fetch_workloads.py (HotpotQA parquet -> JSON)
 
 [tool.setuptools.packages.find]
-include = ["agent*", "serving*", "prediction*", "replay*"]
+include = ["agent*", "serving*", "prediction*", "replay*", "analysis*"]
