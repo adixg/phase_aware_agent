@@ -17,7 +17,7 @@ What the trace does and does not say:
 Train and test are separate weeks. This builds one week, the training week by default.
 
     python -m analysis.dag.build                      # data/freeinference/dag/<day>.jsonl, training week
-    python -m analysis.dag.build --week test          # only when you are done designing
+    python -m analysis.dag.build --week test --days 2026-08-30,2026-08-31,2026-09-01   # the validation days
 """
 
 from __future__ import annotations
@@ -33,6 +33,7 @@ import zstandard
 
 WEEKS = {"train": "2026-08-23_2026-08-29", "test": "2026-08-30_2026-09-05"}
 KEY = b'"block_ids"'
+HELDOUT_FROM = "2026-09-02"     # the offline predictor's frozen held-out split (Sep 2-5): never built by accident
 
 
 def strip_blocks(line: bytes) -> bytes:
@@ -76,6 +77,7 @@ def rounds_of(requests: list[dict], stats: Counter, base: int = 0) -> list[dict]
                          "outlives_next": None if nxt is None else sub["end_ms"] > nxt["start_ms"]})
         out.append({"req": base + i, "start": r["start_ms"], "end": r["end_ms"], "ttft": r.get("ttft_ms"),
                     "prompt": tok.get("prompt"), "completion": tok.get("completion"), "cached": tok.get("cached"),
+                    "model": r.get("model"),
                     "finish": r.get("finish_reason"), "trigger": r.get("step_trigger"),
                     "tools": [_tool(c) for c in r["tool_calls"]], "round_ms": round_ms, "subs": subs})
     return out
@@ -146,6 +148,9 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--week", choices=list(WEEKS), default="train",
                     help="train (Aug 23-29, the default) or test (Aug 30-Sep 5)")
+    ap.add_argument("--days", default="", help="comma list of days to build (default: the whole week)")
+    ap.add_argument("--include-heldout", action="store_true",
+                    help=f"allow days from {HELDOUT_FROM}, the held-out split reserved for one final evaluation")
     ap.add_argument("--root", default="data/freeinference/release")
     ap.add_argument("--out", default="data/freeinference/dag")
     args = ap.parse_args()
@@ -157,6 +162,11 @@ def main() -> None:
         if not name.endswith(".jsonl.zst"):
             continue
         day = name[: -len(".jsonl.zst")]
+        if args.days and day not in args.days.split(","):
+            continue
+        if day >= HELDOUT_FROM and not args.include_heldout:
+            print(day, "skipped: held-out split (--include-heldout to build it)")
+            continue
         if args.week == "test" and day == "2026-08-29":
             continue                      # a 4-session fragment of a day the training week holds in full
         stats = Counter()

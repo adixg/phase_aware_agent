@@ -140,10 +140,11 @@ COLUMNS = META + FEATURES + LABELS
 def features(v: dict, hist: dict) -> dict:
     """Features of one decision point, from a prefix_view and the user history alone."""
     done = v["done"]
+    now = v.get("cutoff", v["cur_start"])          # a response-completed view (online.py) decides later than the start
     f = {"harness": v["harness"], "turn_idx": v["turn"], "step": v["step"], "prompt": v["cur_prompt"],
          "new_tokens": v["cur_new"],
          "idle_before_s": NA if v["idle_before_ms"] is None else v["idle_before_ms"] / 1000,
-         "active_s": (v["cur_start"] - v["turn_start"]) / 1000,
+         "active_s": (now - v["turn_start"]) / 1000,
          "attained_work_s": sum(r["ideal"] for r in done),
          "prefix_completion": sum(r["completion"] or 0 for r in done),
          "prefix_result_tokens": sum(x["result_tokens"] or 0 for r in done for x in r["tools"]),
@@ -159,10 +160,11 @@ def features(v: dict, hist: dict) -> dict:
     f.update({f"cat_{c}": n for c, n in counts.items()})
     for i in range(1, PREV + 1):
         r = done[-i] if len(done) >= i else None
+        open_ = r is not None and r.get("open")      # emitted but its tools have not returned: outcomes unknown
         f.update({f"prev{i}_width": NA if r is None else len(r["tools"]),
                   f"prev{i}_cat": NA if r is None else (r["tools"][0]["cat"] if r["tools"] else "__none__"),
-                  f"prev{i}_errors": NA if r is None else sum(x["outcome"] not in ("ok", None) for x in r["tools"]),
-                  f"prev{i}_result_tokens": NA if r is None else sum(x["result_tokens"] or 0 for x in r["tools"]),
+                  f"prev{i}_errors": NA if r is None or open_ else sum(x["outcome"] not in ("ok", None) for x in r["tools"]),
+                  f"prev{i}_result_tokens": NA if r is None or open_ else sum(x["result_tokens"] or 0 for x in r["tools"]),
                   f"prev{i}_round_s": NA if r is None or r["round_ms"] is None else r["round_ms"] / 1000,
                   f"prev{i}_completion": NA if r is None else r["completion"],
                   f"prev{i}_finish": NA if r is None else r["finish"]})
