@@ -4,7 +4,8 @@ import math
 
 import pytest
 
-from analysis.replay.sim import Cheap, Config, Profile, Req, Session, Simulator, _annotate, build_sessions, summarize
+from analysis.replay.sim import (POLICIES, Cheap, Config, Profile, Req, Session, Simulator, _annotate, build_sessions,
+                                 estimate_remaining, estimate_windowed, summarize)
 
 # 1 ms per prompt token, 10 ms per output token: easy arithmetic in seconds
 PROFILE = Profile(decode_ms=10.0, prefill_ms=1.0)
@@ -188,3 +189,68 @@ def test_summarize_counts_only_feasible_turns():
     budgets = budgets_for(raw, {"a": 1.0, "b": 10.0})   # a needs 2 s, so it can never make 1 s
     s = summarize(run(raw, budgets=budgets))
     assert s["feasible_turns"] == 1 and s["attainment"] == 1.0
+
+
+def test_requests_of_a_turn_are_linked_and_the_last_has_no_successor():
+    sess = build_sessions([chain("a", 0, 3), single("b", 1)], PROFILE)[0]
+    assert sess.reqs[0].nxt is sess.reqs[1] and sess.reqs[1].nxt is sess.reqs[2]
+    assert sess.reqs[2].nxt is None
+
+
+def test_window_equals_the_oracle_once_it_reaches_the_end_of_the_turn():
+    raw = [chain("long", 0, 6)]
+    cheap, head = cheap_for(raw), build_sessions(raw, PROFILE)[0].reqs[0]
+    exact = 6 * 1.1 + 5 * 1.0                       # six calls of 1.1 s and five 1 s gaps
+    assert estimate_windowed(head, 6, cheap) == pytest.approx(exact)
+    assert estimate_windowed(head, 100, cheap) == pytest.approx(exact)
+    assert estimate_remaining(head, POLICIES["llf_oracle"], cheap, PROFILE) == pytest.approx(exact)
+
+
+def test_window_knows_the_next_k_requests_and_guesses_the_rest():
+    raw = [chain("long", 0, 6)]
+    cheap, reqs = cheap_for(raw), build_sessions(raw, PROFILE)[0].reqs
+    known = 2 * (1.1 + 1.0)                          # two calls and the gap after each
+    tail = cheap.service + (cheap.remaining_calls(reqs[2]) - 1) * (cheap.service + cheap.gap)
+    assert estimate_windowed(reqs[0], 2, cheap) == pytest.approx(known + tail)
+    # one step of lookahead is the one request plus a guess for everything after it
+    assert estimate_windowed(reqs[5], 1, cheap) == pytest.approx(1.1)   # last request: nothing to guess
+
+
+def test_longer_windows_move_the_estimate_toward_the_truth():
+    # a long turn the history underestimates: here each deeper window is no further from the truth
+    # (not true of every turn: a guess can overshoot, then a deeper window corrects it)
+    raw = [chain("long", 0, 12)] + [chain(f"s{i}", i, 2) for i in range(1, 20)]
+    cheap, head = cheap_for(raw), build_sessions(raw, PROFILE)[0].reqs[0]
+    truth = head.rem_service + head.rem_gaps
+    errs = [abs(estimate_windowed(head, k, cheap) - truth) for k in (1, 2, 4, 8, 12)]
+    assert all(b <= a + 1e-9 for a, b in zip(errs, errs[1:])) and errs[-1] == pytest.approx(0, abs=1e-9)
+
+
+def test_deep_lookahead_schedules_like_the_oracle():
+    raw = [single("hog", 0, prompt=0, completion=200), chain("long", 0.1, 6), chain("short", 0.2, 1)]
+    budgets = budgets_for(raw, {"long": 20.0, "short": 15.0, "hog": 1000.0})
+    lat = lambda pol: sorted(t.latency for t in run(raw, policy=pol, budgets=budgets, cheap=cheap_for(raw)).turns)
+    assert lat("llf_la8") == pytest.approx(lat("llf_oracle"))
+    assert lat("srpt_la8") == pytest.approx(lat("srpt_oracle"))
+
+
+def test_summarize_reports_tail_latency_and_slowdown():
+    s = summarize(run([single("a", 0), single("b", 0)]))
+    assert s["p99_latency"] == pytest.approx(4.0)    # b waits behind a: 2 s + 2 s
+    assert s["mean_slowdown"] == pytest.approx((1.0 + 2.0) / 2)   # latency / no-contention duration
+
+
+def test_pure_srpt_ignores_deadlines_that_the_deadline_policy_gives_up_on():
+    # at t=2 "doomed" (0.2 s of work) can no longer make its deadline and "fine" needs 6 s. The
+    # deadline-aware SRPT serves fine first; pure SRPT serves the shorter job, doomed, first.
+    raw = [single("hog", 0), single("doomed", 0.1, prompt=100, completion=10), single("fine", 0.2, prompt=1000, completion=500)]
+    budgets = budgets_for(raw, {"hog": 1000.0, "doomed": 0.5, "fine": 50.0})
+    history = cheap_for([chain("past", 0, 3)])      # the history table needs some tool gaps to average
+    doomed = lambda pol: next(t for t in run(raw, policy=pol, budgets=budgets, cheap=history).turns if t.budget == 0.5)
+    assert doomed("psrpt_oracle").latency == pytest.approx(2 + 0.2 - 0.1)
+    assert doomed("srpt_oracle").latency == pytest.approx(2 + 6 + 0.2 - 0.1)
+
+
+def test_pure_srpt_has_cheap_oracle_and_depth_variants():
+    assert {"psrpt_cheap", "psrpt_oracle", "psrpt_la1", "psrpt_la8"} <= set(POLICIES)
+    assert all(POLICIES[p].pure for p in ("psrpt_cheap", "psrpt_oracle", "psrpt_la4")) and not POLICIES["srpt_oracle"].pure

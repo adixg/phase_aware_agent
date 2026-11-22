@@ -18,7 +18,7 @@ import heapq
 import math
 import zlib
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -35,6 +35,12 @@ class Policy:
     calls: bool = False       # true remaining-call count (else the Cheap table)
     gaps: bool = False        # true future tool gaps
     tokens: bool = False      # true future service, including this call's completion length
+    lookahead: int | None = None  # true service and gaps for the next k requests of the turn (this one
+                                  # included), historical averages beyond; overrides the three flags
+    pure: bool = False        # no deadline logic: a turn judged lost is not pushed behind the others
+    forecast: str | None = None   # remaining calls from a fitted admission forecaster instead of the Cheap
+                                  # table: "first" = first user turn of a session only (what the predictor
+                                  # was built for; later turns fall back to Cheap), "all" = every turn
 
 
 POLICIES = {
@@ -52,7 +58,19 @@ POLICIES = {
     "srpt_gaps": Policy("srpt", gaps=True),
     "srpt_tokens": Policy("srpt", tokens=True),
     "srpt_oracle": Policy("srpt", True, True, True),
+    # shortest remaining time first for mean latency (JCT): the fair comparison with attained service
+    "psrpt_cheap": Policy("srpt", pure=True),
+    "psrpt_oracle": Policy("srpt", True, True, True, pure=True),
 }
+LOOKAHEAD_DEPTHS = (1, 2, 4, 8)
+POLICIES["psrpt_calls"] = Policy("srpt", calls=True, pure=True)
+for _fam, _kind, _pure in (("llf", "llf", False), ("srpt", "srpt", False), ("psrpt", "srpt", True)):
+    POLICIES[f"{_fam}_predfirst"] = Policy(_kind, pure=_pure, forecast="first")
+    POLICIES[f"{_fam}_predall"] = Policy(_kind, pure=_pure, forecast="all")
+for _k in LOOKAHEAD_DEPTHS:
+    POLICIES[f"llf_la{_k}"] = Policy("llf", lookahead=_k)
+    POLICIES[f"srpt_la{_k}"] = Policy("srpt", lookahead=_k)
+    POLICIES[f"psrpt_la{_k}"] = Policy("srpt", lookahead=_k, pure=True)
 EVICTIONS = ("lru", "cheap", "oracle")
 STEP_CAP = 12
 NEVER_S = 86400.0     # next use of a session that never returns, in the Cheap gap tables
@@ -74,6 +92,19 @@ class Req:
     rem_calls: int = 0    # from this request to the end of the turn, inclusive
     rem_service: float = 0.0
     rem_gaps: float = 0.0
+    nxt: "Req | None" = field(default=None, compare=False, repr=False)  # next request of the turn
+    pred_first: float = 0.0   # forecast remaining calls (this one included), first user turns only; 0 = none
+    pred_all: float = 0.0     # the same, from a forecaster fitted on every turn
+
+
+@dataclass(slots=True)
+class TurnMeta:
+    """What is known when a turn is admitted (model, prompt) and how it turned out, for fitting a forecaster."""
+    model: str | None
+    prompt: int           # provider prompt tokens of the turn's first request
+    calls: int            # requests in the turn
+    tools: int            # tool calls it emitted
+    duration_ms: int      # first request's start to last request's end
 
 
 @dataclass
@@ -82,6 +113,8 @@ class Session:
     arrival: float
     reqs: list[Req]
     z: list[float]        # per turn: duration with no contention
+    harness: str | None = None
+    turns: list[TurnMeta] = field(default_factory=list)
 
 
 def build_sessions(raw: list[dict], profile: Profile, max_think_s: float = 3600.0) -> list[Session]:
@@ -104,8 +137,23 @@ def build_sessions(raw: list[dict], profile: Profile, max_think_s: float = 3600.
             reqs.append(Req(r["prompt"], min(base, r["prompt"]), r["completion"], gap, r["cat"],
                             rs[i - 1]["cat"] if i else "__start__", step, turn, ends_turn))
             step += 1
-        out.append(Session(s["sid"], (s["start"] - t0) / 1000, reqs, _annotate(reqs, profile)))
+        for a, b in zip(reqs, reqs[1:]):
+            if not a.last_in_turn:
+                a.nxt = b
+        out.append(Session(s["sid"], (s["start"] - t0) / 1000, reqs, _annotate(reqs, profile),
+                           s.get("harness"), _turn_meta(rs, reqs)))
     return out
+
+
+def _turn_meta(raw: list[dict], reqs: list[Req]) -> list[TurnMeta]:
+    first: dict[int, int] = {}
+    last: dict[int, int] = {}
+    for i, r in enumerate(reqs):
+        first.setdefault(r.turn, i)
+        last[r.turn] = i
+    return [TurnMeta(raw[a].get("model"), raw[a].get("provider_prompt") or raw[a]["prompt"], b - a + 1,
+                     sum(raw[i].get("n_tools") or 0 for i in range(a, b + 1)), raw[b].get("end", 0) - raw[a].get("start", 0))
+            for t, a in sorted(first.items()) for b in (last[t],)]
 
 
 def _annotate(reqs: list[Req], profile: Profile) -> list[float]:
@@ -172,9 +220,28 @@ class Cheap:
         return NEVER_S if i == len(v) else tail[i] / (len(v) - i) - elapsed
 
 
+def estimate_windowed(r: Req, k: int, cheap: Cheap) -> float:
+    """Remaining time in this turn when the next `k` requests are known exactly (their service and
+    the gap after each) and the rest of the turn is a historical average. Exact once the window
+    reaches the end of the turn, so a deep enough window equals the full oracle."""
+    total, cur = 0.0, r
+    for _ in range(k):
+        total += cur.ideal
+        if cur.nxt is None:
+            return total
+        total += cur.gap
+        cur = cur.nxt
+    return total + cheap.service + (cheap.remaining_calls(cur) - 1) * (cheap.service + cheap.gap)
+
+
 def estimate_remaining(r: Req, p: Policy, cheap: Cheap, profile: Profile) -> float:
     """Remaining time in this turn, each ingredient either true (the policy's flags) or historical."""
+    if p.lookahead is not None:
+        return estimate_windowed(r, p.lookahead, cheap)
     n = float(r.rem_calls) if p.calls else cheap.remaining_calls(r)
+    if p.forecast:
+        forecast = r.pred_first if p.forecast == "first" else r.pred_all
+        n = forecast if forecast > 0 else n
     prefill = (profile.overhead_ms + profile.prefill_ms * (r.prompt - r.base)) / 1000
     current = r.ideal if p.tokens else prefill + profile.decode_ms * cheap.completion / 1000
     later = r.rem_calls - 1
@@ -291,8 +358,8 @@ class Simulator:
         while self.ready:
             item = heapq.heappop(self.ready)
             st = self.states[item[2]]
-            lost = (p.kind == "edf" and now > st.deadline) or \
-                (p.kind in ("llf", "srpt") and now + item[4] > st.deadline)
+            lost = not p.pure and ((p.kind == "edf" and now > st.deadline) or
+                                   (p.kind in ("llf", "srpt") and now + item[4] > st.deadline))
             if lost:
                 heapq.heappush(self.demoted, (item[3], item[1], item))
                 continue
@@ -400,6 +467,9 @@ def summarize(sim: Simulator, horizon: float | None = None) -> dict:
         "attainment_all": sum(not x.missed for x in t) / len(t) if t else None,
         "mean_latency": sum(lat) / len(lat) if lat else None,
         "p95_latency": lat[int(0.95 * len(lat))] if lat else None,
+        "p99_latency": lat[int(0.99 * len(lat))] if lat else None,
+        "mean_slowdown": sum(x.latency / x.z for x in t if x.z > 0) / sum(1 for x in t if x.z > 0)
+        if any(x.z > 0 for x in t) else None,
         "hit_rate": sim.tokens_hit / sim.tokens_prompt if sim.tokens_prompt else None,
         "tokens_evicted": sim.tokens_evicted,
     }
