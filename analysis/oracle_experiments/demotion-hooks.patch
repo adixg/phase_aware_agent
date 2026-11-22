@@ -1,0 +1,24 @@
+--- a/analysis/replay/sim.py
++++ b/analysis/replay/sim.py
+@@ -269,0 +270,9 @@
++    def _ordering_estimate(self, r: Req) -> float:
++        return estimate_remaining(r, self.policy, self.cheap, self.cfg.profile)
++
++    def _demotion_estimate(self, r: Req, ordering_estimate: float) -> float:
++        return ordering_estimate
++
++    def _record_demotion(self, st: _State, item: tuple, now: float) -> None:
++        pass
++
+@@ -276 +285 @@
+-        est = 0.0
++        est = demotion_est = 0.0
+@@ -278 +287,2 @@
+-            est = estimate_remaining(r, p, self.cheap, self.cfg.profile)
++            est = self._ordering_estimate(r)
++            demotion_est = self._demotion_estimate(r, est)
+@@ -286 +296 @@
+-        heapq.heappush(self.ready, (key, self.seq, st.idx, now, est))
++        heapq.heappush(self.ready, (key, self.seq, st.idx, now, demotion_est))
+@@ -296,0 +307 @@
++                self._record_demotion(st, item, now)
