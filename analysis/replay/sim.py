@@ -5,8 +5,9 @@ tool or human gap, so scheduling delay feeds back into the session. The server h
 concurrent requests and a KV pool of `kv_tokens`. A session's prefix stays in the pool between
 requests (evictable, tail first) and later requests pay prefill only for what is missing.
 
-Simplifications: a request reserves prompt + completion at start and is never preempted
-mid-generation; decode speed does not depend on batch size; prefixes are per-session (no
+Simplifications: a request reserves prompt + completion at start, and is preempted only by a
+more urgent request (Config.preempt, off by default), never to make room for its own output;
+decode speed does not depend on batch size; prefixes are per-session (no
 sharing across sessions); subagent requests are not replayed (extract.py drops them, their
 time stays in the parent's tool gap).
 """
@@ -16,8 +17,10 @@ from __future__ import annotations
 import bisect
 import heapq
 import math
+import random
 import zlib
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass
 
 
@@ -54,7 +57,7 @@ POLICIES = {
     "srpt_oracle": Policy("srpt", True, True, True),
 }
 EVICTIONS = ("lru", "cheap", "oracle")
-STEP_CAP = 12
+STEP_CAP = 12     # steps 0..11 each get their own Cheap bucket; later ones share one per doubling
 NEVER_S = 86400.0     # next use of a session that never returns, in the Cheap gap tables
 MIN_BUCKET = 20
 
@@ -84,22 +87,52 @@ class Session:
     z: list[float]        # per turn: duration with no contention
 
 
-def build_sessions(raw: list[dict], profile: Profile, max_think_s: float = 3600.0) -> list[Session]:
-    """Sessions from extract.py's records; arrivals are seconds after the first session starts."""
+def reply_time(spec: str) -> Callable[[str, int, float], float]:
+    """How long a user takes to reply between turns: (session, turn, recorded seconds) -> seconds.
+    "recorded" keeps the trace's own pause, "scale:K" multiplies it, and "fixed:S", "exp:MEAN"
+    and "lognormal:MEDIAN,SIGMA" replace it. Drawn values depend only on session and turn, so
+    every policy and every run sees the same pauses."""
+    kind, _, arg = spec.partition(":")
+    nums = [float(x) for x in arg.split(",")] if arg else []
+    draw = lambda sid, turn: random.Random(zlib.crc32(f"{sid}:{turn}".encode()))
+    if kind == "recorded" and not nums:
+        return lambda sid, turn, rec: rec
+    if kind == "scale" and len(nums) == 1:
+        return lambda sid, turn, rec: nums[0] * rec
+    if kind == "fixed" and len(nums) == 1:
+        return lambda sid, turn, rec: nums[0]
+    if kind == "exp" and len(nums) == 1:
+        return lambda sid, turn, rec: draw(sid, turn).expovariate(1 / nums[0])
+    if kind == "lognormal" and len(nums) == 2:
+        return lambda sid, turn, rec: draw(sid, turn).lognormvariate(math.log(nums[0]), nums[1])
+    raise ValueError(f"reply time {spec!r}: use recorded, scale:K, fixed:S, exp:MEAN or lognormal:MEDIAN,SIGMA")
+
+
+def build_sessions(raw: list[dict], profile: Profile, max_think_s: float = 3600.0,
+                   reply: Callable[[str, int, float], float] | None = None, unit: str = "turn") -> list[Session]:
+    """Sessions from extract.py's records; arrivals are seconds after the first session starts.
+    `reply` (see reply_time) sets the pause before each new user message, capped at `max_think_s`.
+    `unit` is what a deadline covers: each "turn", or the whole "session" (one turn, with the
+    user's pauses as waits inside it)."""
+    if unit not in ("turn", "session"):
+        raise ValueError(f"unit {unit!r}: use turn or session")
     t0 = min(s["start"] for s in raw)
     out = []
     for s in sorted(raw, key=lambda s: (s["start"], s["sid"])):
         reqs, rs, turn, step = [], s["requests"], -1, 0
         for i, r in enumerate(rs):
-            if i == 0 or r["user"]:
+            if i == 0 or (r["user"] and unit == "turn"):
                 turn, step = turn + 1, 0
             base = 0
             if i:
                 base = r["lcp"] + (rs[i - 1]["completion"] if r["append"] else 0)
             nxt = rs[i + 1] if i + 1 < len(rs) else None
             gap = None if nxt is None else r["gap"] / 1000
-            ends_turn = nxt is None or nxt["user"]
-            if gap is not None and ends_turn:
+            user_next = nxt is not None and nxt["user"]
+            ends_turn = nxt is None or (user_next and unit == "turn")
+            if user_next:
+                if reply is not None:
+                    gap = reply(s["sid"], i + 1, gap)
                 gap = min(gap, max_think_s)   # a long-idle session is effectively a new one
             reqs.append(Req(r["prompt"], min(base, r["prompt"]), r["completion"], gap, r["cat"],
                             rs[i - 1]["cat"] if i else "__start__", step, turn, ends_turn))
@@ -126,6 +159,11 @@ def _annotate(reqs: list[Req], profile: Profile) -> list[float]:
     return [z[t] for t in sorted(z)]
 
 
+def step_bucket(step: int) -> int:
+    """12, 13, 14, ... for steps 12-23, 24-47, 48-95, ...: a session can run to hundreds of steps."""
+    return step if step < STEP_CAP else STEP_CAP + int(math.log2(step / STEP_CAP))
+
+
 class Cheap:
     """Historical averages from training sessions: what a system knows without a predictor."""
 
@@ -135,7 +173,7 @@ class Cheap:
         completions, news, tool_gaps = [], [], []
         for s in sessions:
             for r in s.reqs:
-                k = min(r.step, STEP_CAP)
+                k = step_bucket(r.step)
                 by_key[(k, r.prev_cat)].append(r.rem_calls)
                 by_step[k].append(r.rem_calls)
                 completions.append(r.completion)
@@ -159,7 +197,7 @@ class Cheap:
             self.gaps[cat], self.tail_sums[cat] = v, tail
 
     def remaining_calls(self, r: Req) -> float:
-        k = min(r.step, STEP_CAP)
+        k = step_bucket(r.step)
         return max(1.0, self.calls.get((k, r.prev_cat), self.calls_step.get(k, 1.0)))
 
     def time_to_next_use(self, cat: str, elapsed: float) -> float:
@@ -196,6 +234,8 @@ class Config:
     seed: int = 0
     compress: float = 1.0            # session start offsets are divided by this
     closed: int | None = None        # at most this many sessions alive; arrivals are ignored
+    preempt: str = "none"            # none, or priority: a waiting request that does not fit may
+                                     # preempt running ones the policy ranks below it
 
 
 @dataclass
@@ -209,13 +249,15 @@ class TurnResult:
 
 
 class _State:
-    __slots__ = ("s", "idx", "i", "resident", "idle_since", "next_use", "cat", "attained", "turn_arrival", "deadline")
+    __slots__ = ("s", "idx", "i", "resident", "idle_since", "next_use", "cat", "attained", "turn_arrival", "deadline",
+                 "resume")
 
     def __init__(self, s: Session, idx: int):
         self.s, self.idx, self.i, self.resident = s, idx, 0, 0
         self.idle_since = self.next_use = 0.0
         self.cat = "__none__"
         self.attained = self.turn_arrival = self.deadline = 0.0
+        self.resume = None   # (prompt, base, completion) of a preempted request still to finish
 
 
 class Simulator:
@@ -236,10 +278,15 @@ class Simulator:
         self.alive = 0
         self.pending: list[int] = []
         self.states = [_State(s, i) for i, s in enumerate(sessions)]
+        self.active: dict[int, dict] = {}   # running requests, by session
+        self.preemptions = 0
+        if cfg.preempt not in ("none", "priority"):
+            raise ValueError(f"preempt {cfg.preempt!r}: use none or priority")
 
-    def _push(self, t: float, kind: str, st: _State) -> None:
+    def _push(self, t: float, kind: str, st: _State) -> int:
         self.seq += 1
         heapq.heappush(self.events, (t, self.seq, kind, st.idx))
+        return self.seq
 
     def run(self) -> "Simulator":
         cfg = self.cfg
@@ -251,8 +298,10 @@ class Simulator:
             for _ in range(min(cfg.closed, len(self.states))):
                 self._push(0.0, "ready", self.states[self.pending.pop()])
         while self.events:
-            now, _, kind, idx = heapq.heappop(self.events)
+            now, seq, kind, idx = heapq.heappop(self.events)
             st = self.states[idx]
+            if kind == "finish" and self.active.get(idx, {}).get("seq") != seq:
+                continue                                  # its request was preempted
             if kind == "ready":
                 self._on_ready(st, now)
             else:
@@ -285,15 +334,17 @@ class Simulator:
         self.seq += 1
         heapq.heappush(self.ready, (key, self.seq, st.idx, now, est))
 
+    def _lost(self, item, now: float) -> bool:
+        """The policy judges this turn unable to make its deadline."""
+        p, st = self.policy, self.states[item[2]]
+        return (p.kind == "edf" and now > st.deadline) or \
+            (p.kind in ("llf", "srpt") and now + item[4] > st.deadline)
+
     def _pop(self, now: float):
         """Best ready request. Turns the policy judges already lost wait behind all the others."""
-        p = self.policy
         while self.ready:
             item = heapq.heappop(self.ready)
-            st = self.states[item[2]]
-            lost = (p.kind == "edf" and now > st.deadline) or \
-                (p.kind in ("llf", "srpt") and now + item[4] > st.deadline)
-            if lost:
+            if self._lost(item, now):
                 heapq.heappush(self.demoted, (item[3], item[1], item))
                 continue
             return item
@@ -328,13 +379,15 @@ class Simulator:
                 return
             st = self.states[item[2]]
             r = st.s.reqs[st.i]
-            usable = min(st.resident, r.base)
+            prompt, base, completion = st.resume or (r.prompt, r.base, r.completion)
+            usable = min(st.resident, base)
             self.used -= st.resident - usable    # a prefix past the shared part is stale
             st.resident = usable
-            need = min(r.prompt + r.completion, cfg.kv_tokens) - usable
+            need = min(prompt + completion, cfg.kv_tokens) - usable
             was_idle = self.idle.pop(st.idx, None) is not None
             short = need - (cfg.kv_tokens - self.used)
-            if short > 0 and sum(v.resident for v in self.idle.values()) < short:
+            if short > 0 and sum(v.resident for v in self.idle.values()) < short \
+                    and not (cfg.preempt == "priority" and self._preempt_for(item, short, now)):
                 if was_idle:
                     self.idle[st.idx] = st
                 heapq.heappush(self.ready, item)   # head of line waits for memory
@@ -352,19 +405,71 @@ class Simulator:
             self.running += 1
             cpu_hit = 0.0
             if cfg.profile.reload_ms is not None:
-                cpu_hit = r.base - usable
-            uncached = r.prompt - usable - cpu_hit
+                cpu_hit = base - usable
+            uncached = prompt - usable - cpu_hit
             service = (cfg.profile.overhead_ms + cfg.profile.prefill_ms * uncached + (cfg.profile.reload_ms or 0.0) * cpu_hit
-                       + cfg.profile.decode_ms * r.completion) / 1000
-            self.tokens_prompt += r.prompt
+                       + cfg.profile.decode_ms * completion) / 1000
+            before_decode = service - cfg.profile.decode_ms * completion / 1000   # only read when preempting
+            self.tokens_prompt += prompt
             self.tokens_hit += usable
             st.resident = usable + need
             st.attained += service
             self.busy.append((now, service))
-            self._push(now + service, "finish", st)
+            self.active[st.idx] = dict(item=item, start=now, service=service, before_decode=before_decode,
+                                       prompt=prompt, usable=usable, completion=completion,
+                                       busy=len(self.busy) - 1, seq=self._push(now + service, "finish", st))
+
+    def _preempt_for(self, item, short: float, now: float) -> bool:
+        """Free `short` tokens for `item` by preempting running requests the policy ranks below
+        it, lowest first: turns it judges lost, then by its own key. Each victim keeps what it
+        has computed (its prompt and the output so far) as an evictable prefix and goes back in
+        line with its original priority, as vLLM keeps a preempted request's blocks cached.
+        Returns False, preempting nothing, if that cannot free enough."""
+        if self._lost(item, now):
+            return False
+        below = [(not self._lost(a["item"], now), a["item"]) for a in self.active.values()
+                 if self._lost(a["item"], now) or a["item"][:2] > item[:2]]
+        below.sort(reverse=True)
+        below.sort(key=lambda x: x[0])                    # lost first, then lowest priority first
+        free = sum(v.resident for v in self.idle.values())
+        victims = []
+        for _, v in below:
+            if free >= short:
+                break
+            victims.append(v)
+            free += self.states[v[2]].resident
+        if free < short:
+            return False
+        for v in victims:
+            self._preempt(self.states[v[2]], now)
+        return True
+
+    def _preempt(self, st: _State, now: float) -> None:
+        a = self.active.pop(st.idx)
+        p = self.cfg.profile
+        elapsed = now - a["start"]
+        if elapsed < a["before_decode"]:                  # still reading its prompt
+            done = elapsed / a["before_decode"] if a["before_decode"] > 0 else 1.0
+            computed, generated = a["usable"] + int(done * (a["prompt"] - a["usable"])), 0
+        else:
+            computed = a["prompt"]
+            generated = min(a["completion"], int((elapsed - a["before_decode"]) * 1000 / p.decode_ms))
+        keep = min(computed + generated, st.resident)
+        self.used -= st.resident - keep
+        st.resident = keep
+        st.attained -= a["service"] - elapsed
+        self.busy[a["busy"]] = (a["start"], elapsed)
+        st.resume = (a["prompt"] + generated, a["prompt"] + generated, a["completion"] - generated)
+        st.idle_since = now
+        self.idle[st.idx] = st
+        self.running -= 1
+        self.preemptions += 1
+        heapq.heappush(self.ready, a["item"])
 
     def _on_finish(self, st: _State, now: float) -> None:
         self.running -= 1
+        self.active.pop(st.idx, None)
+        st.resume = None
         r = st.s.reqs[st.i]
         if r.last_in_turn:
             budget = st.deadline - st.turn_arrival
@@ -402,6 +507,7 @@ def summarize(sim: Simulator, horizon: float | None = None) -> dict:
         "p95_latency": lat[int(0.95 * len(lat))] if lat else None,
         "hit_rate": sim.tokens_hit / sim.tokens_prompt if sim.tokens_prompt else None,
         "tokens_evicted": sim.tokens_evicted,
+        "preemptions": sim.preemptions,
     }
     if horizon is not None:
         out["utilization"] = sim.utilization(0.1 * horizon, 0.9 * horizon)
