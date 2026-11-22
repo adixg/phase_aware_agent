@@ -7,7 +7,10 @@ Data protocol.
   fit        Aug 23-27     tuning        Aug 28-29
   validation Aug 30-Sep 1  read ONCE, after the model and every setting are frozen, then refit on Aug 23-29
   held out   Sep 2-5       never read here (the offline predictor's frozen split)
-  At most TUNING_BUDGET configurations are tried on the tuning days.
+  At most TUNING_BUDGET configurations are tried on the tuning days (analysis/dag/online_eval.py logs them).
+  The configuration grid was revised once, after a plumbing check on Aug 26 (a fit day) and before any tuning
+  day was read: heavier smoothing and category-first chains, because harness-first chains with light smoothing
+  lost to the baseline there. The gate thresholds below were not touched.
 
 Offline gate (per event).
   Baseline  the step-only table: the empirical distribution of requests remaining given the step and
