@@ -157,9 +157,13 @@ def main() -> None:
     ap.add_argument("folder", nargs="?", default="data/freeinference/dag")
     ap.add_argument("--out", default=None, help="gzipped CSV; default <folder>/online_rows.csv.gz")
     ap.add_argument("--audit", type=int, default=0, help="rebuild this many events from a scrambled future and compare")
+    ap.add_argument("--history-from", default=None,
+                    help="folder of earlier days whose turns count toward account history (rows are written only "
+                         "for the main folder): a later week's users arrive with the history they already had")
     args = ap.parse_args()
     sessions = load_sessions(args.folder)
-    hist = UserHistory(sessions)
+    earlier = load_sessions(args.history_from) if args.history_from else []
+    hist = UserHistory(earlier + sessions)
     if args.audit:
         raise SystemExit(1 if audit(sessions, hist, args.audit) else 0)
     out = args.out or os.path.join(args.folder, "online_rows.csv.gz")

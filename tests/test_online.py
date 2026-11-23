@@ -90,3 +90,12 @@ def test_response_view_extends_the_prefix_view_without_touching_it():
     before = prefix_view(turns, 0, 1)
     response_view(turns, 0, 1)
     assert prefix_view(turns, 0, 1) == before                 # building R did not mutate A's view
+
+
+def test_history_carried_over_from_an_earlier_week_counts_only_turns_that_ended_before():
+    earlier = make([req(0, 1000, 1000, trigger="user")], sid="old")          # one turn of user u1, ended at 1000
+    turns = make([req(5000, 6000, 1000, trigger="user")], sid="new")
+    h = UserHistory([earlier, turns])
+    assert features(prefix_view(turns, 0, 0), h.before("u1", 5000))["user_prior_turns"] == 1
+    assert features(prefix_view(turns, 0, 0), h.before("u1", 500))["user_prior_turns"] == 0      # not yet ended
+    assert features(prefix_view(turns, 0, 0), UserHistory([turns]).before("u1", 5000))["user_prior_turns"] == 0
