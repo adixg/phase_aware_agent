@@ -20,7 +20,13 @@
 # the predictor's held-out split Sep 2-5 stays untouched; report it with report.py on its own file)
 # or online_l40s (opt-in, exploratory: the online forecaster's predictions, built by
 # python -m analysis.replay.online_sidecar, on the same days, with the admission forecaster for reference). WORKERS defaults to the cores Slurm allocated, else the core count minus two.
-# DRY_RUN=1 prints the commands instead of running them. Plain bash, so it also runs on the cluster:
+# Deadline unit and user reply time (analysis/replay/sim.py) are knobs; the defaults are the first runs,
+# one deadline per turn and the trace's own pauses. Session-level deadlines with a fixed 5 s reply:
+#
+#   UNIT=session REPLY=fixed:5 OUT=data/freeinference/gate_session_reply5 LOADS=0.9 KV=0 \
+#       SWEEPS=class_l40s,prop_l40s analysis/replay/run_all.sh
+#
+# LOADS and KV narrow the grid (KV=0 is unlimited memory). DRY_RUN=1 prints the commands instead of running them. Plain bash, so it also runs on the cluster:
 # see analysis/replay/run_gate.sbatch.
 set -e
 export PYTHONPATH=.
@@ -54,8 +60,11 @@ for d in 2026-08-{23..29} 2026-08-30 2026-08-31 2026-09-0{1..5}; do
   [[ -f data/freeinference/compact/$d.json ]] || [[ -n $RUN ]] || { echo "missing data/freeinference/compact/$d.json" >&2; exit 1; }
 done
 
-KV=0,1000000,2000000,4000000,8000000,16000000
-GRID=(--loads 0.7,0.9,1.1 --kv $KV --workers $WORKERS)
+LOADS=${LOADS:-0.7,0.9,1.1}
+KV=${KV:-0,1000000,2000000,4000000,8000000,16000000}
+UNIT=${UNIT:-turn}
+REPLY=${REPLY:-recorded}
+GRID=(--loads $LOADS --kv $KV --unit $UNIT --reply $REPLY --workers $WORKERS)
 echo "sweeps: $SWEEPS, workers: $WORKERS"
 # the lookahead-depth policies (--lookahead) run in the main sweep only; the rest are sensitivity checks
 want class_l40s && $RUN $PY analysis/replay/run_gate.py --out $OUT/class_l40s.jsonl --profiles l40s --tight 0.5,1,2 --lookahead "${GRID[@]}"

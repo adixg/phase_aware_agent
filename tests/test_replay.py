@@ -5,7 +5,7 @@ import math
 import pytest
 
 from analysis.replay.sim import (POLICIES, Cheap, Config, Profile, Req, Session, Simulator, _annotate, build_sessions,
-                                 estimate_remaining, estimate_windowed, summarize)
+                                 estimate_remaining, estimate_windowed, reply_time, step_bucket, summarize)
 
 # 1 ms per prompt token, 10 ms per output token: easy arithmetic in seconds
 PROFILE = Profile(decode_ms=10.0, prefill_ms=1.0)
@@ -254,3 +254,92 @@ def test_pure_srpt_ignores_deadlines_that_the_deadline_policy_gives_up_on():
 def test_pure_srpt_has_cheap_oracle_and_depth_variants():
     assert {"psrpt_cheap", "psrpt_oracle", "psrpt_la1", "psrpt_la8"} <= set(POLICIES)
     assert all(POLICIES[p].pure for p in ("psrpt_cheap", "psrpt_oracle", "psrpt_la4")) and not POLICIES["srpt_oracle"].pure
+
+
+def two_turns(gap_s):
+    return [raw_session("a", 0, [raw_req(1000, 100, user=True, gap=int(gap_s * 1000)), raw_req(1000, 100, user=True)])]
+
+
+@pytest.mark.parametrize("spec, pause", [("recorded", 100), ("fixed:5", 5), ("scale:0.5", 50), ("fixed:7200", 3600)])
+def test_reply_time_sets_the_pause_before_the_next_turn(spec, pause):
+    sessions = build_sessions(two_turns(100), PROFILE, reply=reply_time(spec))
+    sim = Simulator(sessions, Config(slots=1, kv_tokens=math.inf, profile=PROFILE)).run()
+    assert sim.turns[1].arrival == pytest.approx(2 + pause)   # the 3600 s cap still applies
+
+
+def test_drawn_reply_times_repeat_and_match_their_distribution():
+    exp, logn = reply_time("exp:30"), reply_time("lognormal:60,1.5")
+    assert exp("s1", 1, 0) == exp("s1", 1, 0) and exp("s1", 1, 0) != exp("s1", 2, 0)
+    draws = sorted(exp(f"s{i}", 1, 0) for i in range(4000))
+    assert sum(draws) / len(draws) == pytest.approx(30, rel=0.06)
+    assert sorted(logn(f"s{i}", 1, 0) for i in range(4000))[2000] == pytest.approx(60, rel=0.1)
+
+
+def test_unknown_reply_time_is_refused():
+    with pytest.raises(ValueError):
+        reply_time("gamma:2")
+
+
+def test_session_unit_puts_the_whole_session_under_one_deadline():
+    # two turns, 5 s apart: as sessions they are one unit whose time includes the pause. The second
+    # request reuses the first one's 100 output tokens, so it prefills 900 of its 1000.
+    sessions = build_sessions(two_turns(100), PROFILE, reply=reply_time("fixed:5"), unit="session")
+    assert [len(s.z) for s in sessions] == [1] and sessions[0].z[0] == pytest.approx(2 + 5 + 1.9)
+    assert [r.step for r in sessions[0].reqs] == [0, 1] and sessions[0].reqs[0].rem_calls == 2
+    sim = Simulator(sessions, Config(slots=1, kv_tokens=math.inf, profile=PROFILE)).run()
+    assert [t.latency for t in sim.turns] == pytest.approx([2 + 5 + 1.9])
+
+
+def test_turn_unit_still_splits_at_user_messages():
+    sessions = build_sessions(two_turns(100), PROFILE, reply=reply_time("fixed:5"))
+    assert sessions[0].z == pytest.approx([2, 1.9])
+
+
+def test_late_steps_share_a_bucket_per_doubling():
+    assert [step_bucket(s) for s in (0, 11, 12, 23, 24, 47, 48, 500)] == [0, 11, 12, 12, 13, 13, 14, 17]
+
+
+def preempt_case():
+    # A starts at 0 (1000-token prompt: 1 s prefill, then 1 s decode); B arrives at 0.5 needing as much,
+    # in a 2000-token pool that cannot hold both. B's deadline is tight, A's loose.
+    raw = [single("A", 0), single("B", 0.5)]
+    return raw, budgets_for(raw, {"A": 100.0, "B": 3.0})
+
+
+def test_without_preemption_the_urgent_request_waits():
+    raw, budgets = preempt_case()
+    sim = run(raw, slots=2, kv_tokens=2000, policy="edf", budgets=budgets)
+    by_budget = {t.budget: t for t in sim.turns}
+    assert by_budget[3.0].latency == pytest.approx(2 - 0.5 + 2) and by_budget[3.0].missed
+    assert sim.preemptions == 0
+
+
+def test_priority_preemption_runs_the_urgent_request_and_resumes_the_victim():
+    raw, budgets = preempt_case()
+    sim = run(raw, slots=2, kv_tokens=2000, policy="edf", budgets=budgets, preempt="priority")
+    by_budget = {t.budget: t for t in sim.turns}
+    # A is halfway through its prompt at 0.5: it keeps 500 computed tokens, B runs 0.5-2.5, then A
+    # resumes with 500 tokens left to read (0.5 s) and its whole output (1 s): done at 4.0
+    assert sim.preemptions == 1
+    assert by_budget[3.0].latency == pytest.approx(2.0) and not by_budget[3.0].missed
+    assert by_budget[100.0].latency == pytest.approx(4.0)
+    assert sim.running == 0 and not sim.active
+
+
+def test_a_less_urgent_request_never_preempts():
+    raw = [single("A", 0), single("B", 0.5)]
+    budgets = budgets_for(raw, {"A": 3.0, "B": 100.0})     # now the running one is the urgent one
+    sim = run(raw, slots=2, kv_tokens=2000, policy="edf", budgets=budgets, preempt="priority")
+    assert sim.preemptions == 0
+    assert sorted(t.latency for t in sim.turns) == pytest.approx([2.0, 3.5])
+
+
+def test_preempted_in_decode_keeps_its_output_so_far():
+    # A decodes from 1 s; B (urgent) arrives at 1.5, when A has 50 of its 100 output tokens
+    raw = [single("A", 0), single("B", 1.5)]
+    budgets = budgets_for(raw, {"A": 100.0, "B": 3.0})
+    sim = run(raw, slots=2, kv_tokens=2000, policy="edf", budgets=budgets, preempt="priority")
+    by_budget = {t.budget: t for t in sim.turns}
+    # A keeps 1050 tokens; B needs 1100 of the 950 free, so 150 of A's go. A resumes at 3.5 with
+    # 900 of its 1050-token prompt cached: 0.15 s prefill + 0.5 s for its last 50 tokens
+    assert by_budget[100.0].latency == pytest.approx(3.5 + 0.15 + 0.5)

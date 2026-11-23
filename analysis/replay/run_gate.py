@@ -7,6 +7,8 @@ alone gives? Cheap tables and deadline budgets come from the training days, resu
 from __future__ import annotations
 
 import argparse
+import datetime
+import glob
 import json
 import math
 import multiprocessing as mp
@@ -17,10 +19,20 @@ import orjson
 
 from analysis.replay import online_sidecar
 from analysis.replay.forecast import Forecaster
-from analysis.replay.sim import LOOKAHEAD_DEPTHS, Cheap, Config, Profile, Simulator, build_sessions, summarize
+from analysis.replay.sim import (LOOKAHEAD_DEPTHS, Cheap, Config, Profile, Simulator, build_sessions, reply_time,
+                                 summarize)
 
-TRAIN_DAYS = [f"2026-08-{d}" for d in range(23, 30)]
-TEST_DAYS = ["2026-08-30", "2026-08-31", "2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04", "2026-09-05"]
+def days(first: str, last: str) -> list[str]:
+    a, b = datetime.date.fromisoformat(first), datetime.date.fromisoformat(last)
+    return [str(a + datetime.timedelta(n)) for n in range((b - a).days + 1)]
+
+
+# in time order: history tables and deadline budgets from the earlier days, results from the later ones.
+# The default is the two weeks the dag/ and online/ work uses (train Aug 23-29, test Aug 30-Sep 5);
+# --span 16weeks is the full trace, train May 17-Jul 11 and test Jul 12-Sep 5.
+SPANS = {"2weeks": (days("2026-08-23", "2026-08-29"), days("2026-08-30", "2026-09-05")),
+         "16weeks": (days("2026-05-17", "2026-07-11"), days("2026-07-12", "2026-09-05"))}
+TRAIN_DAYS, TEST_DAYS = SPANS["2weeks"]
 
 PROFILES = {
     "l40s": Profile(decode_ms=22.4, prefill_ms=0.046, overhead_ms=140.0),  # measured, validate.py
@@ -60,9 +72,13 @@ def default_workers() -> int:
     return n if os.environ.get("SLURM_JOB_ID") else max(1, n - 2)
 
 
-def load(compact: str, day: str, profile: Profile):
-    path = os.path.join(compact, f"{day}.json")
-    return build_sessions(orjson.loads(open(path, "rb").read())["sessions"], profile)
+def load(compact: str, day: str, profile: Profile, reply: str = "recorded", unit: str = "turn"):
+    """One day's sessions. A day at a week boundary is in both weeks' releases, with different
+    sessions, so compact files may be named WEEK__DAY.json and a day is all of them; a plain DAY.json
+    (what run_all.sh extracts) is read when there are none."""
+    paths = sorted(glob.glob(os.path.join(compact, f"*__{day}.json"))) or [os.path.join(compact, f"{day}.json")]
+    raw = [s for path in paths if os.path.exists(path) for s in orjson.loads(open(path, "rb").read())["sessions"]]
+    return build_sessions(raw, profile, reply=reply_time(reply), unit=unit) if raw else []
 
 
 def find_compress(sessions, slots: int, target: float) -> tuple[float, float]:
@@ -85,7 +101,7 @@ def run_one(task: dict) -> dict:
     cfg = Config(task["slots"], task["kv"] if task["kv"] else math.inf, profile, policy=task["policy"],
                  eviction=task["eviction"], deadline_mode=task["mode"], slack=task["tight"],
                  budgets=tuple(q * task["tight"] for q in _G["quantiles"][task["profile"]]),
-                 compress=task["compress"])
+                 compress=task["compress"], preempt=task.get("preempt", "none"))
     s = summarize(Simulator(sessions, cfg, _G["cheap"][task["profile"]]).run(), task["horizon"])
     return {**task, **s}
 
@@ -95,7 +111,9 @@ def main() -> None:
     ap.add_argument("--compact", default="data/freeinference/compact")
     ap.add_argument("--out", required=True)
     ap.add_argument("--profiles", default="l40s")
-    ap.add_argument("--days", default=",".join(TEST_DAYS))
+    ap.add_argument("--span", default="2weeks", choices=list(SPANS),
+                    help="which days train the history tables and which are replayed (see SPANS)")
+    ap.add_argument("--days", default=None, help="days to replay (default: the span's test days)")
     ap.add_argument("--loads", default="0.5,0.7,0.9")
     ap.add_argument("--kv", default="0", help="pool sizes in tokens, comma separated; 0 = unlimited")
     ap.add_argument("--tight", default="1,2,4", help="multiplier on class budgets, or the slack if proportional")
@@ -114,14 +132,20 @@ def main() -> None:
     ap.add_argument("--only", default="",
                     help="comma list of admission policies to run (default: all selected); lets a forecast "
                          "comparison skip the sweep's other policies")
+    ap.add_argument("--reply", default="recorded",
+                    help="user pause between turns: recorded, scale:K, fixed:S, exp:MEAN or lognormal:MEDIAN,SIGMA")
+    ap.add_argument("--unit", default="turn", choices=["turn", "session"], help="what each deadline covers")
+    ap.add_argument("--preempt", default="none", choices=["none", "priority"],
+                    help="priority: a waiting request that does not fit may preempt running ones ranked below it")
     args = ap.parse_args()
 
     t0 = time.time()
-    profiles, days = args.profiles.split(","), args.days.split(",")
+    train_days, test_days = SPANS[args.span]
+    profiles, days = args.profiles.split(","), (args.days.split(",") if args.days else test_days)
     _G.update(test={}, cheap={}, quantiles={})
     for pn in profiles:
         p = PROFILES[pn]
-        train = [s for d in TRAIN_DAYS for s in load(args.compact, d, p)]
+        train = [s for d in train_days for s in load(args.compact, d, p, args.reply, args.unit)]
         _G["cheap"][pn] = Cheap(train, p)
         z = sorted(x for s in train for x in s.z)
         _G["quantiles"][pn] = [z[int(q * len(z))] for q in BUDGET_QUANTILES]
@@ -129,7 +153,7 @@ def main() -> None:
         print(pn, "budgets (s) at tightness 1:", [round(x, 1) for x in _G["quantiles"][pn]], flush=True)
         del train
         for d in days:
-            _G["test"][(pn, d)] = load(args.compact, d, p)
+            _G["test"][(pn, d)] = load(args.compact, d, p, args.reply, args.unit)
             for f in forecasters:
                 f.annotate(_G["test"][(pn, d)])
             if args.online:
@@ -147,7 +171,7 @@ def main() -> None:
         compress = dict(pool.map(compress_task, [(pn, d, l, args.slots) for pn in profiles for d in days for l in loads]))
         for k, v in compress.items():
             print(k, "compress %.2f horizon %.0f s" % v, flush=True)
-        tasks = [dict(profile=pn, day=d, load=l, compress=compress[(pn, d, l, args.slots)][0], horizon=compress[(pn, d, l, args.slots)][1], slots=args.slots, kv=float(kv),
+        tasks = [dict(profile=pn, day=d, load=l, compress=compress[(pn, d, l, args.slots)][0], horizon=compress[(pn, d, l, args.slots)][1], slots=args.slots, reply=args.reply, unit=args.unit, preempt=args.preempt, kv=float(kv),
                       mode=args.mode, tight=float(t), policy=a, eviction=e)
                  for pn in profiles for d in days for l in loads for kv in args.kv.split(",")
                  for t in args.tight.split(",") for a, e in pairs if not (e != "lru" and float(kv) == 0)]
