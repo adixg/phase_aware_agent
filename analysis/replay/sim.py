@@ -40,7 +40,8 @@ class Policy:
     pure: bool = False        # no deadline logic: a turn judged lost is not pushed behind the others
     forecast: str | None = None   # remaining calls from a fitted admission forecaster instead of the Cheap
                                   # table: "first" = first user turn of a session only (what the predictor
-                                  # was built for; later turns fall back to Cheap), "all" = every turn
+                                  # was built for; later turns fall back to Cheap), "all" = every turn,
+                                  # "online" = the online forecaster's estimate at this request's admission
 
 
 POLICIES = {
@@ -67,11 +68,12 @@ POLICIES["psrpt_calls"] = Policy("srpt", calls=True, pure=True)
 for _fam, _kind, _pure in (("llf", "llf", False), ("srpt", "srpt", False), ("psrpt", "srpt", True)):
     POLICIES[f"{_fam}_predfirst"] = Policy(_kind, pure=_pure, forecast="first")
     POLICIES[f"{_fam}_predall"] = Policy(_kind, pure=_pure, forecast="all")
+    POLICIES[f"{_fam}_online"] = Policy(_kind, pure=_pure, forecast="online")
 for _k in LOOKAHEAD_DEPTHS:
     POLICIES[f"llf_la{_k}"] = Policy("llf", lookahead=_k)
     POLICIES[f"srpt_la{_k}"] = Policy("srpt", lookahead=_k)
     POLICIES[f"psrpt_la{_k}"] = Policy("srpt", lookahead=_k, pure=True)
-EVICTIONS = ("lru", "cheap", "oracle")
+EVICTIONS = ("lru", "cheap", "oracle", "online")
 STEP_CAP = 12
 NEVER_S = 86400.0     # next use of a session that never returns, in the Cheap gap tables
 MIN_BUCKET = 20
@@ -95,6 +97,8 @@ class Req:
     nxt: "Req | None" = field(default=None, compare=False, repr=False)  # next request of the turn
     pred_first: float = 0.0   # forecast remaining calls (this one included), first user turns only; 0 = none
     pred_all: float = 0.0     # the same, from a forecaster fitted on every turn
+    pred_online: float = 0.0  # online forecaster at this request's admission: remaining calls, this one included
+    pred_stall: float = -1.0  # online forecaster when this request's response completes: wall time of its round (s)
 
 
 @dataclass(slots=True)
@@ -240,7 +244,7 @@ def estimate_remaining(r: Req, p: Policy, cheap: Cheap, profile: Profile) -> flo
         return estimate_windowed(r, p.lookahead, cheap)
     n = float(r.rem_calls) if p.calls else cheap.remaining_calls(r)
     if p.forecast:
-        forecast = r.pred_first if p.forecast == "first" else r.pred_all
+        forecast = getattr(r, f"pred_{p.forecast}")
         n = forecast if forecast > 0 else n
     prefill = (profile.overhead_ms + profile.prefill_ms * (r.prompt - r.base)) / 1000
     current = r.ideal if p.tokens else prefill + profile.decode_ms * cheap.completion / 1000
@@ -276,12 +280,13 @@ class TurnResult:
 
 
 class _State:
-    __slots__ = ("s", "idx", "i", "resident", "idle_since", "next_use", "cat", "attained", "turn_arrival", "deadline")
+    __slots__ = ("s", "idx", "i", "resident", "idle_since", "next_use", "cat", "attained", "turn_arrival", "deadline", "pred")
 
     def __init__(self, s: Session, idx: int):
         self.s, self.idx, self.i, self.resident = s, idx, 0, 0
         self.idle_since = self.next_use = 0.0
         self.cat = "__none__"
+        self.pred = -1.0              # online forecast of the stall its last finished request is in (-1 = none)
         self.attained = self.turn_arrival = self.deadline = 0.0
 
 
@@ -385,7 +390,10 @@ class Simulator:
             return (ranks[v.idx] + 1) * self.cheap.service / self.cfg.slots
         if e == "oracle":
             return v.next_use - now
-        return self.cheap.time_to_next_use(v.cat, now - v.idle_since)
+        elapsed = now - v.idle_since
+        if e == "online" and v.pred - elapsed > 0:      # the forecast stall has not run out yet
+            return v.pred - elapsed
+        return self.cheap.time_to_next_use(v.cat, elapsed)
 
     def _dispatch(self, now: float) -> None:
         cfg = self.cfg
@@ -439,6 +447,7 @@ class Simulator:
             z = st.s.z[r.turn]
             self.turns.append(TurnResult(st.turn_arrival, latency, budget, z, latency > budget, z <= budget))
         st.cat, st.idle_since = r.cat if not r.last_in_turn else "__none__", now
+        st.pred = -1.0 if r.last_in_turn else r.pred_stall    # a finished turn is known to be over: the table covers it
         self.idle[st.idx] = st
         st.i += 1
         if r.gap is None:

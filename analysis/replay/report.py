@@ -192,6 +192,37 @@ def forecast_section(path: str) -> None:
     print("%6s | %s" % ("psrpt", "   ".join("%-14s" % c for c in cols)))
 
 
+def online_section(path: str) -> None:
+    """The online forecaster in the simulator, against the committed simulator gate (analysis/dag/online_gates.py):
+    the share of the gap between history and the truth that it closes, and no worse p95 latency than history."""
+    from analysis.dag.online_gates import SIM_MIN
+    att, p95 = load(path), load(path, "p95_latency")
+    if not any(pol.endswith("_online") for c in att.values() for pol, _, _ in c):
+        return      # swept without --online
+    cells = [k for k in att if k[2] in REALISTIC_KV]
+    print("\n\nOnline forecaster in the simulator (exploratory: it failed its offline gate). Realistic KV sizes, all loads and")
+    print("tightnesses. Attainment points over history; share = online gain / the gain from the truth.")
+    print("%-26s %8s %8s %8s %9s %12s" % ("", "online", "truth", "share", "up/down", "p95 vs hist"))
+
+    def row(name, hist, online, truth):
+        d = [(100 * (mean(att[k], online) - mean(att[k], hist)), 100 * (mean(att[k], truth) - mean(att[k], hist)))
+             for k in cells if None not in (mean(att[k], online), mean(att[k], hist), mean(att[k], truth))]
+        if not d:
+            return
+        gain, ceiling = st.mean(x for x, _ in d), st.mean(y for _, y in d)
+        lat = [r for k in cells if (r := reduction(p95.get(k, {}), online, hist)) is not None]
+        share = gain / ceiling if ceiling else float("nan")
+        print("%-26s %+8.2f %+8.2f %7.0f%% %4d/%-4d %+11.1f%%  %s" % (
+            name, gain, ceiling, 100 * share, sum(x > 0.5 for x, _ in d), sum(x < -0.5 for x, _ in d),
+            st.mean(lat) if lat else float("nan"),
+            "PASS" if share >= SIM_MIN and (not lat or st.mean(lat) >= 0) else "fail"))
+
+    for fam in ("llf", "srpt"):
+        row(f"admission {fam}", (f"{fam}_cheap", "lru"), (f"{fam}_online", "lru"), (f"{fam}_calls", "lru"))
+    for adm in ("fcfs", "edf", "llf_cheap", "srpt_cheap"):
+        row(f"eviction under {adm}", (adm, "cheap"), (adm, "online"), (adm, "oracle"))
+
+
 def label(pair) -> str:
     return "/".join(pair).replace("_cheap", "~").replace("_oracle", "*")
 
@@ -203,6 +234,7 @@ def main(path: str) -> None:
         print("(a partial run, selected with --only: only the sections that need no full grid)")
         ladder_section(cells)
         forecast_section(path)
+        online_section(path)
         jct_section(path)
         return
     verdicts = defaultdict(list)
@@ -256,6 +288,7 @@ def main(path: str) -> None:
     ladder_section(cells)
     depth_section(path)
     forecast_section(path)
+    online_section(path)
     jct_section(path)
 
     print("\n\nVerdict on attainment (realistic KV: 1, 2, 4M tokens; unlimited memory also counted for admission)")

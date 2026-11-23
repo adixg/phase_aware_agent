@@ -17,7 +17,9 @@
 #
 # SWEEPS is a comma list of: class_l40s prop_l40s class_offload class_trace class_l40s_slots16 (default: all)
 # or forecast_l40s (opt-in, ~3 min: Andrew's admission forecaster on the validation days Aug 30-Sep 1 only, so
-# the predictor's held-out split Sep 2-5 stays untouched; report it with report.py on its own file). WORKERS defaults to the cores Slurm allocated, else the core count minus two.
+# the predictor's held-out split Sep 2-5 stays untouched; report it with report.py on its own file)
+# or online_l40s (opt-in, exploratory: the online forecaster's predictions, built by
+# python -m analysis.replay.online_sidecar, on the same days, with the admission forecaster for reference). WORKERS defaults to the cores Slurm allocated, else the core count minus two.
 # DRY_RUN=1 prints the commands instead of running them. Plain bash, so it also runs on the cluster:
 # see analysis/replay/run_gate.sbatch.
 set -e
@@ -36,7 +38,7 @@ want() { [[ ",$SWEEPS," == *",all,"* || ",$SWEEPS," == *",$1,"* ]]; }
 IFS=, read -ra REQUESTED <<< "$SWEEPS"
 for s in "${REQUESTED[@]}"; do
   case $s in
-    all|class_l40s|prop_l40s|class_offload|class_trace|class_l40s_slots16|forecast_l40s) ;;
+    all|class_l40s|prop_l40s|class_offload|class_trace|class_l40s_slots16|forecast_l40s|online_l40s) ;;
     *) echo "unknown sweep: $s" >&2; exit 2 ;;
   esac
 done
@@ -63,4 +65,6 @@ want class_trace && $RUN $PY analysis/replay/run_gate.py --out $OUT/class_trace.
 want class_l40s_slots16 && $RUN $PY analysis/replay/run_gate.py --out $OUT/class_l40s_slots16.jsonl --profiles l40s --slots 16 --tight 0.5,1,2 "${GRID[@]}"
 FORECAST_POLICIES=las,edf,llf_cheap,srpt_cheap,llf_calls,srpt_calls,llf_oracle,srpt_oracle,psrpt_cheap,psrpt_calls,psrpt_oracle,llf_predfirst,llf_predall,srpt_predfirst,srpt_predall,psrpt_predfirst,psrpt_predall
 [[ ",$SWEEPS," == *",forecast_l40s,"* ]] && $RUN $PY analysis/replay/run_gate.py --out $OUT/forecast_l40s.jsonl --profiles l40s --tight 0.5,1,2 --days 2026-08-30,2026-08-31,2026-09-01 --forecast --only $FORECAST_POLICIES "${GRID[@]}"
+ONLINE_POLICIES=$FORECAST_POLICIES,fcfs,llf_online,srpt_online,psrpt_online
+[[ ",$SWEEPS," == *",online_l40s,"* ]] && $RUN $PY analysis/replay/run_gate.py --out $OUT/online_l40s.jsonl --profiles l40s --tight 0.5,1,2 --days 2026-08-30,2026-08-31,2026-09-01 --forecast --online data/freeinference/online/sidecar_val.csv.gz --only $ONLINE_POLICIES "${GRID[@]}"
 true

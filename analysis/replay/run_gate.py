@@ -15,6 +15,7 @@ import time
 
 import orjson
 
+from analysis.replay import online_sidecar
 from analysis.replay.forecast import Forecaster
 from analysis.replay.sim import LOOKAHEAD_DEPTHS, Cheap, Config, Profile, Simulator, build_sessions, summarize
 
@@ -43,6 +44,11 @@ PAIRS_LOOKAHEAD = [(a, "lru") for a in ADMISSION_LOOKAHEAD]   # opt in with --lo
 # true remaining-call count; opt in with --forecast
 ADMISSION_FORECAST = [f"{f}_{v}" for f in ("llf", "srpt", "psrpt") for v in ("predfirst", "predall")] + ["psrpt_calls"]
 PAIRS_FORECAST = [(a, "lru") for a in ADMISSION_FORECAST]
+# the online forecaster (analysis/replay/online_sidecar.py): admission policies take the A-event forecast, the
+# `online` eviction takes the R-event stall forecast; opt in with --online SIDECAR
+ADMISSION_ONLINE = [f"{f}_online" for f in ("llf", "srpt", "psrpt")]
+PAIRS_ONLINE = [(a, "lru") for a in ADMISSION_ONLINE] + \
+    [(a, "online") for a in ("fcfs", "edf", "llf_cheap", "srpt_cheap", "llf_online", "srpt_online")]
 
 _G: dict = {}
 
@@ -102,6 +108,9 @@ def main() -> None:
                     help="also run the lookahead-depth policies (llf/srpt with the next 1, 2, 4, 8 requests known)")
     ap.add_argument("--forecast", action="store_true",
                     help="also run the policies that take remaining calls from the admission forecaster")
+    ap.add_argument("--online", default="", metavar="SIDECAR",
+                    help="also run the policies that take the online forecaster's predictions from this sidecar "
+                         "file (analysis/replay/online_sidecar.py); only sessions it covers get predictions")
     ap.add_argument("--only", default="",
                     help="comma list of admission policies to run (default: all selected); lets a forecast "
                          "comparison skip the sweep's other policies")
@@ -123,9 +132,14 @@ def main() -> None:
             _G["test"][(pn, d)] = load(args.compact, d, p)
             for f in forecasters:
                 f.annotate(_G["test"][(pn, d)])
+            if args.online:
+                hit = online_sidecar.annotate(_G["test"][(pn, d)], args.online)
+                print(d, "online predictions for", hit, "requests", flush=True)
 
     loads = [float(x) for x in args.loads.split(",")]
-    pairs = PAIRS + (PAIRS_LOOKAHEAD if args.lookahead else []) + (PAIRS_FORECAST if args.forecast else [])
+    pairs = PAIRS + (PAIRS_LOOKAHEAD if args.lookahead else []) + (PAIRS_FORECAST if args.forecast else []) + \
+        (PAIRS_ONLINE if args.online else [])
+    pairs = list(dict.fromkeys(pairs))
     if args.only:
         keep = set(args.only.split(","))
         pairs = [(a, e) for a, e in pairs if a in keep]

@@ -81,3 +81,58 @@ def test_forecast_policies_exist_for_each_family_and_the_pure_ones_have_no_deadl
         for v in ("predfirst", "predall"):
             assert POLICIES[f"{fam}_{v}"].forecast == v[4:]
     assert POLICIES["psrpt_predall"].pure and not POLICIES["srpt_predall"].pure
+
+
+# --- the online forecaster's predictions in the replay -------------------------------------------------------
+
+import csv
+import gzip
+
+from analysis.replay.online_sidecar import COLUMNS, annotate
+from analysis.replay.sim import Config, Simulator
+
+
+def test_online_policy_takes_the_forecast_and_falls_back_to_cheap_without_one():
+    train = sessions([2, 6])
+    cheap = Cheap(train, PROFILE)
+    test = sessions([5])
+    first = test[0].reqs[0]
+    p, base = POLICIES["srpt_online"], POLICIES["srpt_cheap"]
+    assert estimate_remaining(first, p, cheap, PROFILE) == pytest.approx(estimate_remaining(first, base, cheap, PROFILE))
+    first.pred_online = 3.0
+    per_call = cheap.service + cheap.gap
+    assert estimate_remaining(first, p, cheap, PROFILE) - estimate_remaining(first, base, cheap, PROFILE) \
+        == pytest.approx((3.0 - cheap.remaining_calls(first)) * per_call)
+    assert POLICIES["psrpt_online"].pure and not POLICIES["llf_online"].pure
+
+
+def test_sidecar_sets_predictions_by_session_turn_and_step(tmp_path):
+    test = sessions([3, 2])
+    path = tmp_path / "sidecar.csv.gz"
+    with gzip.open(path, "wt", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(COLUMNS)
+        w.writerow(["s0", 0, 1, "A", "4.5", "0.1", "2.0"])
+        w.writerow(["s0", 1, 0, "R", "0.0", "0.9", "7.5"])
+    assert annotate(test, str(path)) == 1
+    by = {(r.turn, r.step): r for r in test[0].reqs}
+    assert by[(0, 1)].pred_online == pytest.approx(5.5)          # the replay counts the current request too
+    assert by[(1, 0)].pred_stall == pytest.approx(7.5) and by[(0, 0)].pred_online == 0.0 and by[(0, 0)].pred_stall == -1.0
+
+
+def test_online_eviction_uses_the_forecast_stall_until_it_runs_out_then_the_table():
+    train = sessions([3, 3])
+    cheap = Cheap(train, PROFILE)
+    sim = Simulator(train, Config(1, 1000, PROFILE, eviction="online"), cheap)
+    sim.states = {}
+    a, b = _idle(sim, 0, pred=30.0), _idle(sim, 1, pred=5.0)
+    assert sim._score(a, 10.0, {}) == pytest.approx(30.0 - 10.0)           # evict the one returning later
+    assert sim._score(b, 10.0, {}) == pytest.approx(cheap.time_to_next_use(b.cat, 10.0))   # forecast spent: the table
+    assert _idle(sim, 2, pred=-1.0).pred == -1.0
+
+
+def _idle(sim, idx, pred):
+    from analysis.replay.sim import _State
+    st = _State(sim.sessions[0], idx)
+    st.idle_since, st.cat, st.pred = 0.0, "Read", pred
+    return st
