@@ -4,11 +4,11 @@
 # the closed-loop replay. One server per job, so run one job per KV mode.
 #
 #   sbatch scripts/pressure_replay.sbatch                         # recompute: vLLM alone, 125k-token pool
-#   MODE=lmcache sbatch scripts/pressure_replay.sbatch            # + LMCache CPU tier (CPU_GB, default 22)
-#   MODE=lmcache CPU_GB=7 sbatch scripts/pressure_replay.sbatch   # a CPU tier the size of the GPU pool
+#   MODE=native sbatch scripts/pressure_replay.sbatch             # + vLLM's built-in CPU tier (CPU_GB, default 22)
+#   MODE=native CPU_GB=7 sbatch scripts/pressure_replay.sbatch    # a CPU tier the size of the GPU pool
+#   MODE=lmcache sbatch scripts/pressure_replay.sbatch            # LMCache instead (needs a matching lmcache)
 #   POOL_TOKENS=400000 sbatch scripts/pressure_replay.sbatch      # roomy pool: the no-pressure reference
 #   WORKLOAD=workloads/pressure_2026-08-16.json MAX_NUM_SEQS=8 sbatch ...
-#   MODE=native VLLM_ARGS='--kv-transfer-config {...}' sbatch ...  # vLLM's own CPU offloading (set its flags)
 #   CONDA_ENV=$HOME/scratch/conda-envs/paa-lmcache MODE=lmcache sbatch ...   # an env with lmcache installed
 #   VENV=$HOME/scratch/venvs/paa-lmcache MODE=lmcache sbatch ...   # or a venv layered on the conda env
 #                                                          # (python -m venv --system-site-packages)
@@ -31,7 +31,7 @@
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
-MODE="${MODE:-recompute}"                     # recompute | lmcache | native
+MODE="${MODE:-recompute}"                     # recompute | native | lmcache
 POOL_TOKENS="${POOL_TOKENS:-125000}"
 CPU_GB="${CPU_GB:-22}"
 MAX_NUM_SEQS="${MAX_NUM_SEQS:-8}"             # requests vLLM runs at once (the simulator's slots)
@@ -66,7 +66,10 @@ case "$MODE" in
         export LMCACHE_CHUNK_SIZE=256 LMCACHE_LOCAL_CPU=True LMCACHE_MAX_LOCAL_CPU_SIZE="$CPU_GB"
         KV_ARGS=(--kv-transfer-config '{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}') ;;
     native)
-        [[ -n "${VLLM_ARGS:-}" ]] || { echo "MODE=native: pass vLLM's offloading flags in VLLM_ARGS (they differ by version)"; exit 1; } ;;
+        # vLLM's built-in CPU offloading. vLLM 0.31: SimpleCPUOffloadConnector, CPU memory in bytes
+        # (kv_connector_extra_config "cpu_bytes_to_use"); other versions may name it differently.
+        CPU_BYTES=$(( CPU_GB * 1000000000 ))
+        KV_ARGS=(--kv-transfer-config "{\"kv_connector\":\"SimpleCPUOffloadConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"cpu_bytes_to_use\":$CPU_BYTES}}") ;;
     *) echo "unknown MODE $MODE"; exit 1 ;;
 esac
 
