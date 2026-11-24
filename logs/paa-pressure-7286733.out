@@ -1,0 +1,24 @@
+---------------------------------------
+Begin Slurm Prolog: Nov-24-2026 10:38:00
+Job ID:    7286733
+User ID:   aghosh367
+Account:   coc
+Job name:  paa-pressure
+Partition: ice-gpu
+QOS:       coc-ice
+---------------------------------------
+node atl1-1-03-004-27-0.pace.gatech.edu  gpu NVIDIA L40S  mode native  pool 125000 tokens (7813 blocks)
+vllm 0.31.0
+MODE=native: pass vLLM's offloading flags in VLLM_ARGS (they differ by version)
+---------------------------------------
+Begin Slurm Epilog: Nov-24-2026 10:38:31
+Job ID:        7286733
+User ID:       aghosh367
+Account:       coc
+Job name:      paa-pressure
+Resources:     cpu=8,gres/gpu:l40s=1,mem=64G,node=1
+Rsrc Used:     cput=00:04:08,vmem=0,walltime=00:00:31,mem=1054348K,energy_used=0
+Partition:     ice-gpu
+QOS:           coc-ice
+Nodes:         atl1-1-03-004-27-0
+---------------------------------------

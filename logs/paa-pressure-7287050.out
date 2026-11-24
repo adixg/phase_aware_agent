@@ -1,0 +1,33 @@
+---------------------------------------
+Begin Slurm Prolog: Nov-24-2026 11:23:14
+Job ID:    7287050
+User ID:   aghosh367
+Account:   coc
+Job name:  paa-pressure
+Partition: ice-gpu
+QOS:       coc-ice
+---------------------------------------
+node atl1-1-03-004-21-0.pace.gatech.edu  gpu NVIDIA L40S  mode native  pool 125000 tokens (7813 blocks)
+vllm 0.31.0
+vllm serve /home/hice1/aghosh367/scratch/hf_cache/hub/models--Qwen--Qwen2.5-7B-Instruct/snapshots/a09a35458c702b33eeacc393d103063234e8bc28/ --served-model-name Qwen/Qwen2.5-7B-Instruct --port 60823 --max-num-seqs 8 --max-model-len 32768 --num-gpu-blocks-override 7813 --gpu-memory-utilization 0.90 --enable-prompt-tokens-details --enable-prefix-caching --generation-config vllm --kv-transfer-config {"kv_connector":"SimpleCPUOffloadConnector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":22000000000}}
+vLLM up on port 60823
+{"tokens": 2048, "cold_ttft_s": 0.1421081661246717, "gpu_hit_ttft_s": 0.031164597952738404, "after_eviction_ttft_s": 0.04024511901661754, "cached_after_eviction": 2032}
+{"tokens": 4096, "cold_ttft_s": 0.3111872891895473, "gpu_hit_ttft_s": 0.0338183359708637, "after_eviction_ttft_s": 0.05065218708477914, "cached_after_eviction": 4080}
+{"tokens": 8192, "cold_ttft_s": 0.6510612589772791, "gpu_hit_ttft_s": 0.03973681898787618, "after_eviction_ttft_s": 0.07232238608412445, "cached_after_eviction": 8176}
+{"tokens": 16384, "cold_ttft_s": 1.4796076740603894, "gpu_hit_ttft_s": 0.05404411908239126, "after_eviction_ttft_s": 0.10819861409254372, "cached_after_eviction": 16368}
+{"tokens": 28672, "cold_ttft_s": 3.088367873802781, "gpu_hit_ttft_s": 0.07503948803059757, "after_eviction_ttft_s": 0.17760449997149408, "cached_after_eviction": 28656}
+{"model": "Qwen/Qwen2.5-7B-Instruct", "pool_tokens": 125000, "prefill_ms_per_token": 0.11056978389934935, "overhead_ms": -178.9256686390974, "after_eviction_ms_per_token": 0.005101667574040833, "decode_ms_per_token_alone": 20.133127585060734}
+3936 requests, 0 errors, wall 786 s
+results: results/traces/pressure-7287050_native_pool125000
+---------------------------------------
+Begin Slurm Epilog: Nov-24-2026 11:46:45
+Job ID:        7287050
+User ID:       aghosh367
+Account:       coc
+Job name:      paa-pressure
+Resources:     cpu=8,gres/gpu:l40s=1,mem=64G,node=1
+Rsrc Used:     cput=03:08:08,vmem=0,walltime=00:23:31,mem=32445040K,energy_used=0
+Partition:     ice-gpu
+QOS:           coc-ice
+Nodes:         atl1-1-03-004-21-0
+---------------------------------------

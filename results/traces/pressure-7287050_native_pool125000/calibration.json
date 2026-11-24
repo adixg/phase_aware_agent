@@ -1,0 +1,45 @@
+{
+ "model": "Qwen/Qwen2.5-7B-Instruct",
+ "pool_tokens": 125000,
+ "points": [
+  {
+   "tokens": 2048,
+   "cold_ttft_s": 0.1421081661246717,
+   "gpu_hit_ttft_s": 0.031164597952738404,
+   "after_eviction_ttft_s": 0.04024511901661754,
+   "cached_after_eviction": 2032
+  },
+  {
+   "tokens": 4096,
+   "cold_ttft_s": 0.3111872891895473,
+   "gpu_hit_ttft_s": 0.0338183359708637,
+   "after_eviction_ttft_s": 0.05065218708477914,
+   "cached_after_eviction": 4080
+  },
+  {
+   "tokens": 8192,
+   "cold_ttft_s": 0.6510612589772791,
+   "gpu_hit_ttft_s": 0.03973681898787618,
+   "after_eviction_ttft_s": 0.07232238608412445,
+   "cached_after_eviction": 8176
+  },
+  {
+   "tokens": 16384,
+   "cold_ttft_s": 1.4796076740603894,
+   "gpu_hit_ttft_s": 0.05404411908239126,
+   "after_eviction_ttft_s": 0.10819861409254372,
+   "cached_after_eviction": 16368
+  },
+  {
+   "tokens": 28672,
+   "cold_ttft_s": 3.088367873802781,
+   "gpu_hit_ttft_s": 0.07503948803059757,
+   "after_eviction_ttft_s": 0.17760449997149408,
+   "cached_after_eviction": 28656
+  }
+ ],
+ "prefill_ms_per_token": 0.11056978389934935,
+ "overhead_ms": -178.9256686390974,
+ "after_eviction_ms_per_token": 0.005101667574040833,
+ "decode_ms_per_token_alone": 20.133127585060734
+}

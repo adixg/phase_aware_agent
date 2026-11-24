@@ -1,0 +1,32 @@
+---------------------------------------
+Begin Slurm Prolog: Nov-24-2026 12:23:04
+Job ID:    7287051
+User ID:   aghosh367
+Account:   coc
+Job name:  paa-pressure
+Partition: ice-gpu
+QOS:       coc-ice
+---------------------------------------
+node atl1-1-03-004-21-0.pace.gatech.edu  gpu NVIDIA L40S  mode native  pool 125000 tokens (7813 blocks)
+vllm 0.31.0
+vllm serve /home/hice1/aghosh367/scratch/hf_cache/hub/models--Qwen--Qwen2.5-7B-Instruct/snapshots/a09a35458c702b33eeacc393d103063234e8bc28/ --served-model-name Qwen/Qwen2.5-7B-Instruct --port 34629 --max-num-seqs 8 --max-model-len 32768 --num-gpu-blocks-override 7813 --gpu-memory-utilization 0.90 --enable-prompt-tokens-details --enable-prefix-caching --generation-config vllm --kv-transfer-config {"kv_connector":"SimpleCPUOffloadConnector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":7000000000}}
+vLLM up on port 34629
+{"tokens": 2048, "cold_ttft_s": 0.1494455609936267, "gpu_hit_ttft_s": 0.03154393401928246, "after_eviction_ttft_s": 0.15969578688964248, "cached_after_eviction": 0}
+{"tokens": 4096, "cold_ttft_s": 0.32847528508864343, "gpu_hit_ttft_s": 0.03376406617462635, "after_eviction_ttft_s": 0.3269780620466918, "cached_after_eviction": 0}
+{"tokens": 8192, "cold_ttft_s": 0.6964956561569124, "gpu_hit_ttft_s": 0.04002015991136432, "after_eviction_ttft_s": 0.6989982130471617, "cached_after_eviction": 0}
+{"tokens": 16384, "cold_ttft_s": 1.545497177168727, "gpu_hit_ttft_s": 0.055298405000939965, "after_eviction_ttft_s": 1.565815637120977, "cached_after_eviction": 0}
+{"tokens": 28672, "cold_ttft_s": 3.1613949548918754, "gpu_hit_ttft_s": 0.0741655370220542, "after_eviction_ttft_s": 3.1165833729319274, "cached_after_eviction": 0}
+{"model": "Qwen/Qwen2.5-7B-Instruct", "pool_tokens": 125000, "prefill_ms_per_token": 0.11299856399729143, "overhead_ms": -165.9804157254694, "after_eviction_ms_per_token": 0.11139359651768611, "decode_ms_per_token_alone": 20.119583395486533}
+[2026-11-24T13:23:28.094] error: *** JOB 7287051 ON atl1-1-03-004-21-0 CANCELLED AT 2026-11-24T13:23:28 DUE TO TIME LIMIT ***
+---------------------------------------
+Begin Slurm Epilog: Nov-24-2026 13:23:30
+Job ID:        7287051
+User ID:       aghosh367
+Account:       coc
+Job name:      paa-pressure
+Resources:     cpu=8,gres/gpu:l40s=1,mem=64G,node=1
+Rsrc Used:     cput=08:03:04,vmem=0,walltime=01:00:23,mem=16853M,energy_used=0
+Partition:     ice-gpu
+QOS:           coc-ice
+Nodes:         atl1-1-03-004-21-0
+---------------------------------------
