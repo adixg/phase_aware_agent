@@ -14,6 +14,7 @@ test = ["pytest", "numpy"]
 embedding = ["numpy", "sentence-transformers"]  # agent/retriever/embedding.py
 analysis = ["scipy>=1.9"]
 data = ["pyarrow"]  # only for scripts/fetch_workloads.py (HotpotQA parquet -> JSON)
+predictors = ["numpy", "orjson", "zstandard", "huggingface_hub"]  # analysis/dag: build the trace rows and fit the predictors
 
 [tool.setuptools.packages.find]
 include = ["agent*", "serving*", "prediction*", "replay*", "analysis*"]
