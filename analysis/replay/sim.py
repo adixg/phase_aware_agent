@@ -19,7 +19,7 @@ import heapq
 import math
 import random
 import zlib
-from collections import defaultdict
+from collections import defaultdict, deque
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -38,6 +38,7 @@ class Policy:
     calls: bool = False       # true remaining-call count (else the Cheap table)
     gaps: bool = False        # true future tool gaps
     tokens: bool = False      # true future service, including this call's completion length
+    predicted: bool = False   # a predictor's remaining time (Config.pred_*) instead of the flags above
 
 
 POLICIES = {
@@ -55,8 +56,13 @@ POLICIES = {
     "srpt_gaps": Policy("srpt", gaps=True),
     "srpt_tokens": Policy("srpt", tokens=True),
     "srpt_oracle": Policy("srpt", True, True, True),
+    "llf_pred": Policy("llf", predicted=True),
+    "srpt_pred": Policy("srpt", predicted=True),
+    # baselines from the literature (Config.pin="ttl" and eviction="cachewise" complete them)
+    "continuum": Policy("continuum"),   # Continuum: pinned sessions first, then program (session) arrival order
+    "fewest": Policy("fewest"),         # CacheWise: the request needing the fewest extra cache tokens first
 }
-EVICTIONS = ("lru", "cheap", "oracle")
+EVICTIONS = ("lru", "cheap", "oracle", "cachewise")
 STEP_CAP = 12     # steps 0..11 each get their own Cheap bucket; later ones share one per doubling
 NEVER_S = 86400.0     # next use of a session that never returns, in the Cheap gap tables
 MIN_BUCKET = 20
@@ -236,6 +242,34 @@ class Config:
     closed: int | None = None        # at most this many sessions alive; arrivals are ignored
     preempt: str = "none"            # none, or priority: a waiting request that does not fit may
                                      # preempt running ones the policy ranks below it
+    # A stand-in for a predictor of each request's remaining time, for the *_pred policies: samples
+    # are the true remaining time x a bias shared by the whole session (the predictor's error, which
+    # the scheduler cannot see) x a per-sample spread (its stated uncertainty, which it can). Sessions
+    # differ in how predictable they are: error sigma = pred_error x a lognormal(0, 0.5) factor.
+    pred_error: float = 0.0
+    pred_samples: int = 8
+    pred_calibrated: bool = True     # the spread matches the session's own error; else it is pred_error for all
+    pred_gate: float | None = None   # llf only: if the samples' coefficient of variation exceeds this, treat
+                                     # the request as EDF would (no remaining time: order by deadline, no early give-up)
+    # Predictive KV offload, with a CPU tier (profile.reload_ms). When a call ends and the session's next
+    # gap is predicted to last at least offload_after_s, its cache moves to CPU at once; a reload is started
+    # at the predicted return - transfer time - prefetch_margin_s if the GPU has free room then (it evicts
+    # nothing). A call that starts before its reload is done waits for the rest of it. The prediction is the
+    # true gap x lognormal(0, gap_error), drawn per gap; a session's end is predicted as an endless gap.
+    offload_after_s: float | None = None
+    prefetch_margin_s: float = 1.0
+    gap_error: float = 0.0
+    # A realistic CPU tier (needs profile.reload_ms). cpu_tokens: its capacity; every prefix is written to it
+    # as it is computed (as LMCache does), least recently used sessions' copies are cut when it is full, and
+    # a reload covers only what is still there. shared_link: reloads and prefetches queue on one GPU-CPU
+    # link instead of each running at full speed.
+    cpu_tokens: float = math.inf
+    shared_link: bool = False
+    # Continuum's KV time-to-live: after a tool call the session's cache cannot be evicted for
+    # tau* = argmax_tau P(tool done by tau) x (recent queueing delay + cost to restore the cache) - tau,
+    # P from the tool category's training-week gaps; with no other room, the latest-arrived pinned
+    # session is evicted first.
+    pin: str = "none"                # none | ttl
 
 
 @dataclass
@@ -250,7 +284,8 @@ class TurnResult:
 
 class _State:
     __slots__ = ("s", "idx", "i", "resident", "idle_since", "next_use", "cat", "attained", "turn_arrival", "deadline",
-                 "resume")
+                 "resume", "loaded_at", "prefetch_tokens", "prefetch_seq", "cpu", "cpu_touch", "pin_until",
+                 "session_start")
 
     def __init__(self, s: Session, idx: int):
         self.s, self.idx, self.i, self.resident = s, idx, 0, 0
@@ -258,11 +293,19 @@ class _State:
         self.cat = "__none__"
         self.attained = self.turn_arrival = self.deadline = 0.0
         self.resume = None   # (prompt, base, completion) of a preempted request still to finish
+        self.loaded_at = 0.0       # when a reload from CPU in progress completes
+        self.prefetch_tokens = 0   # cache offloaded to CPU, waiting for its prefetch
+        self.prefetch_seq = -1     # the prefetch event that is still current
+        self.cpu = 0               # prefix tokens held in a finite CPU tier
+        self.cpu_touch = 0.0
+        self.pin_until = -1.0      # Continuum: no eviction before this
+        self.session_start = 0.0
 
 
 class Simulator:
-    def __init__(self, sessions: list[Session], cfg: Config, cheap: Cheap | None = None):
+    def __init__(self, sessions: list[Session], cfg: Config, cheap: Cheap | None = None, planner=None):
         self.cfg, self.cheap = cfg, cheap
+        self.planner = planner     # planner.RolloutPlanner: picks among the best few ready requests
         self.policy = POLICIES[cfg.policy]
         self.sessions = sessions
         self.ready: list = []
@@ -280,6 +323,18 @@ class Simulator:
         self.states = [_State(s, i) for i, s in enumerate(sessions)]
         self.active: dict[int, dict] = {}   # running requests, by session
         self.preemptions = 0
+        self.tokens_offloaded = self.prefetches = 0
+        self.transfer_wait = 0.0
+        self.cpu_used = 0.0
+        self.link_free = 0.0                  # when the shared GPU-CPU link is next idle
+        self.link_wait = 0.0
+        self.recent_waits: deque = deque(maxlen=100)   # Continuum's sliding window of queueing delay
+        self.pinned_evicted = 0
+        finite_cpu = cfg.cpu_tokens < math.inf or cfg.shared_link
+        if finite_cpu and cfg.profile.reload_ms is None:
+            raise ValueError("cpu_tokens and shared_link describe a CPU tier: use a profile with reload_ms")
+        if cfg.offload_after_s is not None and cfg.profile.reload_ms is None:
+            raise ValueError("predictive offload needs a CPU tier: a profile with reload_ms")
         if cfg.preempt not in ("none", "priority"):
             raise ValueError(f"preempt {cfg.preempt!r}: use none or priority")
 
@@ -304,6 +359,12 @@ class Simulator:
                 continue                                  # its request was preempted
             if kind == "ready":
                 self._on_ready(st, now)
+                if self.planner is not None:
+                    self.planner.on_ready(self, st, now)
+            elif kind == "prefetch":
+                if seq != st.prefetch_seq:
+                    continue                              # superseded by a later offload
+                self._on_prefetch(st, now)
             else:
                 self._on_finish(st, now)
             self._dispatch(now)
@@ -321,16 +382,22 @@ class Simulator:
         if r.step == 0:
             st.turn_arrival, st.attained = now, 0.0
             st.deadline = now + self._budget(st, r.turn)
+        if st.i == 0:
+            st.session_start = now
         p = self.policy
         est = 0.0
-        if p.kind in ("llf", "srpt"):
+        if p.predicted:
+            est = self._predicted_remaining(st, r)
+        elif p.kind in ("llf", "srpt"):
             est = estimate_remaining(r, p, self.cheap, self.cfg.profile)
         key = {"fcfs": lambda: (now,),
                "returning": lambda: (r.step == 0, now),
                "las": lambda: (st.attained, now),
                "edf": lambda: (st.deadline, now),
                "llf": lambda: (st.deadline - est, now),
-               "srpt": lambda: (est, now)}[p.kind]()
+               "srpt": lambda: (est, now),
+               "continuum": lambda: (st.pin_until < now, st.session_start, now),
+               "fewest": lambda: (r.prompt + r.completion - min(st.resident, r.base), now)}[p.kind]()
         self.seq += 1
         heapq.heappush(self.ready, (key, self.seq, st.idx, now, est))
 
@@ -339,6 +406,25 @@ class Simulator:
         p, st = self.policy, self.states[item[2]]
         return (p.kind == "edf" and now > st.deadline) or \
             (p.kind in ("llf", "srpt") and now + item[4] > st.deadline)
+
+    def _predicted_remaining(self, st: _State, r: Req) -> float:
+        """The stand-in predictor's estimate (the median sample), or 0 for a gated-out request."""
+        cfg = self.cfg
+        truth = r.rem_service + r.rem_gaps
+        if cfg.pred_error <= 0:
+            return truth
+        session = random.Random(f"{cfg.seed}:{st.s.sid}")
+        sigma = cfg.pred_error * math.exp(session.gauss(0, 0.5))      # how predictable this session is
+        bias = math.exp(session.gauss(0, sigma))                      # its error, the same for all its requests
+        spread = sigma if cfg.pred_calibrated else cfg.pred_error
+        draw = random.Random(f"{cfg.seed}:{st.s.sid}:{st.i}")
+        samples = sorted(truth * bias * math.exp(draw.gauss(0, spread)) for _ in range(cfg.pred_samples))
+        if cfg.pred_gate is not None and self.policy.kind == "llf":
+            mean = sum(samples) / len(samples)
+            sd = math.sqrt(sum((x - mean) ** 2 for x in samples) / len(samples))
+            if mean <= 0 or sd / mean > cfg.pred_gate:
+                return 0.0
+        return samples[len(samples) // 2]
 
     def _pop(self, now: float):
         """Best ready request. Turns the policy judges already lost wait behind all the others."""
@@ -369,7 +455,21 @@ class Simulator:
             return (ranks[v.idx] + 1) * self.cheap.service / self.cfg.slots
         if e == "oracle":
             return v.next_use - now
+        if e == "cachewise" and v.cat == "__none__":     # waiting on the user or finished: these go first
+            return 1e12 + now - v.idle_since
         return self.cheap.time_to_next_use(v.cat, now - v.idle_since)
+
+    def _victim(self, now: float, ranks):
+        """The idle session to cut next. With Continuum's pins, pinned ones are spared while any other
+        has memory left, and then the latest-arrived pinned session goes first."""
+        pool = self.idle.values()
+        if self.cfg.pin == "ttl":
+            free = [v for v in pool if v.pin_until < now]
+            if not free:
+                self.pinned_evicted += 1
+                return max(pool, key=lambda x: (x.session_start, x.idx))
+            pool = free
+        return max(pool, key=lambda x: self._score(x, now, ranks))
 
     def _dispatch(self, now: float) -> None:
         cfg = self.cfg
@@ -377,6 +477,8 @@ class Simulator:
             item = self._pop(now)
             if item is None:
                 return
+            if self.planner is not None and self.ready:
+                item = self._plan(item, now)
             st = self.states[item[2]]
             r = st.s.reqs[st.i]
             prompt, base, completion = st.resume or (r.prompt, r.base, r.completion)
@@ -394,7 +496,7 @@ class Simulator:
                 return
             ranks = self._queue_ranks() if short > 0 and cfg.eviction != "lru" else None
             while need > cfg.kv_tokens - self.used:
-                v = max(self.idle.values(), key=lambda x: self._score(x, now, ranks))
+                v = self._victim(now, ranks)
                 take = min(v.resident, need - (cfg.kv_tokens - self.used))
                 v.resident -= take
                 self.used -= take
@@ -406,9 +508,22 @@ class Simulator:
             cpu_hit = 0.0
             if cfg.profile.reload_ms is not None:
                 cpu_hit = base - usable
+                if cfg.cpu_tokens < math.inf:            # only what the CPU tier still holds
+                    cpu_hit = max(0, min(st.cpu, base) - usable)
             uncached = prompt - usable - cpu_hit
             service = (cfg.profile.overhead_ms + cfg.profile.prefill_ms * uncached + (cfg.profile.reload_ms or 0.0) * cpu_hit
                        + cfg.profile.decode_ms * completion) / 1000
+            if cfg.shared_link and cpu_hit > 0:          # the reload waits its turn on the link
+                start = max(now, self.link_free)
+                self.link_free = start + cpu_hit * cfg.profile.reload_ms / 1000
+                self.link_wait += start - now
+                service += start - now
+            if cfg.pin == "ttl":
+                self.recent_waits.append(now - item[3])
+            if st.loaded_at > now and usable > 0:        # its prefetch is still copying in
+                self.transfer_wait += st.loaded_at - now
+                service += st.loaded_at - now
+            st.loaded_at, st.prefetch_tokens, st.prefetch_seq = 0.0, 0, -1
             before_decode = service - cfg.profile.decode_ms * completion / 1000   # only read when preempting
             self.tokens_prompt += prompt
             self.tokens_hit += usable
@@ -418,6 +533,21 @@ class Simulator:
             self.active[st.idx] = dict(item=item, start=now, service=service, before_decode=before_decode,
                                        prompt=prompt, usable=usable, completion=completion,
                                        busy=len(self.busy) - 1, seq=self._push(now + service, "finish", st))
+
+    def _plan(self, item, now: float):
+        """Let the planner pick among the policy's best few ready requests; the rest go back in line."""
+        cands = [item]
+        while self.ready and len(cands) < self.planner.candidates:
+            nxt = heapq.heappop(self.ready)
+            if self._lost(nxt, now):
+                heapq.heappush(self.demoted, (nxt[3], nxt[1], nxt))
+            else:
+                cands.append(nxt)
+        choice = self.planner.choose(self, now, cands) if len(cands) > 1 else item
+        for c in cands:
+            if c is not choice:
+                heapq.heappush(self.ready, c)
+        return choice
 
     def _preempt_for(self, item, short: float, now: float) -> bool:
         """Free `short` tokens for `item` by preempting running requests the policy ranks below
@@ -478,7 +608,13 @@ class Simulator:
             self.turns.append(TurnResult(st.turn_arrival, latency, budget, z, latency > budget, z <= budget))
         st.cat, st.idle_since = r.cat if not r.last_in_turn else "__none__", now
         self.idle[st.idx] = st
+        if self.cfg.cpu_tokens < math.inf:
+            self._cpu_store(st, st.resident, now)
+        if self.cfg.pin == "ttl" and r.gap is not None and r.cat != "__none__":
+            st.pin_until = now + self._ttl(st, r.cat)
         st.i += 1
+        if self.cfg.offload_after_s is not None:
+            self._offload(st, r, now)
         if r.gap is None:
             st.next_use = math.inf
             if self.cfg.closed is not None and self.pending:
@@ -486,6 +622,75 @@ class Simulator:
             return
         st.next_use = now + r.gap
         self._push(st.next_use, "ready", st)
+
+    def _cpu_store(self, st: _State, tokens: float, now: float) -> None:
+        """Write-through: the session's prefix is in the CPU tier; least recently stored copies shrink to fit."""
+        cap = self.cfg.cpu_tokens
+        tokens = min(tokens, cap)
+        self.cpu_used += tokens - st.cpu
+        st.cpu, st.cpu_touch = tokens, now
+        while self.cpu_used > cap:
+            v = min((x for x in self.states if x.cpu > 0 and x is not st), key=lambda x: x.cpu_touch)
+            cut = min(v.cpu, self.cpu_used - cap)
+            v.cpu -= cut
+            self.cpu_used -= cut
+
+    def _ttl(self, st: _State, cat: str) -> float:
+        """Continuum's time-to-live for a cache paused on a tool call of category `cat`."""
+        cfg = self.cfg
+        gaps = self.cheap.gaps.get(cat) or self.cheap.gaps.get("Other") or []
+        if not gaps:
+            return 0.0
+        queueing = sum(self.recent_waits) / len(self.recent_waits) if self.recent_waits else 0.0
+        restore = st.resident * (cfg.profile.reload_ms if cfg.profile.reload_ms is not None else cfg.profile.prefill_ms) / 1000
+        n = len(gaps)
+        best, best_tau = 0.0, 0.0                       # tau = 0: no pin
+        for k in range(min(n, 64)):                      # candidate taus at quantiles of past durations
+            i = (k + 1) * n // min(n, 64) - 1
+            tau = gaps[i]
+            value = (i + 1) / n * (queueing + restore) - tau
+            if value > best:
+                best, best_tau = value, tau
+        return best_tau
+
+    def _offload(self, st: _State, r: Req, now: float) -> None:
+        """Move the cache to CPU if the coming gap is predicted to be long, and time its prefetch."""
+        cfg = self.cfg
+        predicted = math.inf
+        if r.gap is not None:
+            predicted = r.gap
+            if cfg.gap_error > 0:
+                predicted *= math.exp(random.Random(f"{cfg.seed}:gap:{st.s.sid}:{st.i}").gauss(0, cfg.gap_error))
+        if predicted < cfg.offload_after_s or st.resident <= 0:
+            return
+        tokens = st.resident
+        self.idle.pop(st.idx, None)
+        self.used -= tokens
+        self.tokens_offloaded += tokens
+        st.resident = 0
+        if predicted < math.inf:
+            transfer = tokens * cfg.profile.reload_ms / 1000
+            st.prefetch_tokens = tokens
+            st.prefetch_seq = self._push(max(now, now + predicted - transfer - cfg.prefetch_margin_s), "prefetch", st)
+
+    def _on_prefetch(self, st: _State, now: float) -> None:
+        """Copy an offloaded cache back if the GPU has the room, without evicting anyone."""
+        tokens = st.prefetch_tokens
+        if self.cfg.cpu_tokens < math.inf:
+            tokens = min(tokens, st.cpu)                 # the CPU tier may have cut its copy since
+        if st.idx in self.active or st.resident > 0 or tokens <= 0 or self.cfg.kv_tokens - self.used < tokens:
+            return
+        start = now
+        if self.cfg.shared_link:
+            start = max(now, self.link_free)
+            self.link_free = start + tokens * self.cfg.profile.reload_ms / 1000
+        self.used += tokens
+        st.resident = tokens
+        st.loaded_at = start + tokens * self.cfg.profile.reload_ms / 1000
+        st.prefetch_tokens = 0
+        st.idle_since = now
+        self.idle[st.idx] = st
+        self.prefetches += 1
 
     def utilization(self, a: float, b: float) -> float:
         """Busy share of the slots for requests starting in [a, b)."""
@@ -508,6 +713,11 @@ def summarize(sim: Simulator, horizon: float | None = None) -> dict:
         "hit_rate": sim.tokens_hit / sim.tokens_prompt if sim.tokens_prompt else None,
         "tokens_evicted": sim.tokens_evicted,
         "preemptions": sim.preemptions,
+        "tokens_offloaded": sim.tokens_offloaded,
+        "prefetches": sim.prefetches,
+        "transfer_wait_s": sim.transfer_wait,
+        "link_wait_s": sim.link_wait,
+        "pinned_evicted": sim.pinned_evicted,
     }
     if horizon is not None:
         out["utilization"] = sim.utilization(0.1 * horizon, 0.9 * horizon)

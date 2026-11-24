@@ -278,3 +278,143 @@ def test_preempted_in_decode_keeps_its_output_so_far():
     # A keeps 1050 tokens; B needs 1100 of the 950 free, so 150 of A's go. A resumes at 3.5 with
     # 900 of its 1050-token prompt cached: 0.15 s prefill + 0.5 s for its last 50 tokens
     assert by_budget[100.0].latency == pytest.approx(3.5 + 0.15 + 0.5)
+
+
+def pred_case():
+    raw = [chain("long", 0.1, 6), chain("short", 0.2, 1), single("hog", 0, prompt=0, completion=200)]
+    return raw, budgets_for(raw, {"long": 20.0, "short": 15.0, "hog": 1000.0})
+
+
+def test_predicted_remaining_with_no_error_matches_the_oracle():
+    raw, budgets = pred_case()
+    cheap = cheap_for(raw)
+    oracle = run(raw, policy="llf_oracle", budgets=budgets, cheap=cheap)
+    pred = run(raw, policy="llf_pred", budgets=budgets, cheap=cheap, pred_error=0.0)
+    assert [t.latency for t in pred.turns] == pytest.approx([t.latency for t in oracle.turns])
+
+
+def test_a_gate_that_trusts_nothing_is_exactly_edf():
+    raw, budgets = pred_case()
+    edf = run(raw, policy="edf", budgets=budgets)
+    gated = run(raw, policy="llf_pred", budgets=budgets, pred_error=0.5, pred_gate=0.0)
+    assert [t.latency for t in gated.turns] == [t.latency for t in edf.turns]
+
+
+def test_predicted_remaining_is_repeatable_and_noisy():
+    raw, budgets = pred_case()
+    a = run(raw, policy="srpt_pred", budgets=budgets, pred_error=0.8, seed=1)
+    b = run(raw, policy="srpt_pred", budgets=budgets, pred_error=0.8, seed=1)
+    assert [t.latency for t in a.turns] == [t.latency for t in b.turns]
+
+
+CPU = Profile(decode_ms=10.0, prefill_ms=1.0, reload_ms=0.5)    # 1100 tokens reload in 0.55 s
+
+
+def gap_session(gap_s=50):
+    # 2 s call, a long tool, then a call whose whole prompt is the first one's prompt and output
+    return raw_session("X", 0, [raw_req(1000, 100, user=True, gap=int(gap_s * 1000), cat="Read"), raw_req(1100, 100, lcp=1000)])
+
+
+def test_offload_and_prefetch_in_time_cost_nothing():
+    sim = run([gap_session()], profile=CPU, offload_after_s=10)
+    # 1100 tokens over the tool gap, then the final 1200 when the session ends (no return predicted)
+    assert sim.tokens_offloaded == 1100 + 1200 and sim.prefetches == 1 and sim.transfer_wait == 0
+    assert sim.turns[0].latency == pytest.approx(2 + 50 + 1)
+
+
+def test_a_late_prefetch_makes_the_call_wait_for_the_rest_of_the_copy():
+    # a negative margin starts the copy 0.55 - 0.3 s before the tool returns: 0.3 s still to go
+    sim = run([gap_session()], profile=CPU, offload_after_s=10, prefetch_margin_s=-0.3)
+    assert sim.transfer_wait == pytest.approx(0.3)
+    assert sim.turns[0].latency == pytest.approx(2 + 50 + 0.3 + 1)
+
+
+def test_offload_frees_memory_that_a_newcomer_would_otherwise_evict():
+    raw = [gap_session(), single("Y", 10, prompt=1000, completion=100)]
+    reactive = run(raw, profile=CPU, kv_tokens=1500, slots=2)
+    predictive = run(raw, profile=CPU, kv_tokens=1500, slots=2, offload_after_s=10)
+    assert reactive.tokens_evicted > 0 and predictive.tokens_evicted == 0
+
+
+def test_short_gaps_stay_on_the_gpu():
+    sim = run([gap_session(gap_s=5)], profile=CPU, offload_after_s=10)
+    assert sim.tokens_offloaded == 1200 and sim.prefetches == 0        # only the cache left at the end
+    assert sim.turns[0].latency == pytest.approx(2 + 5 + 1)
+
+
+def test_offload_needs_a_cpu_tier():
+    with pytest.raises(ValueError):
+        run([gap_session()], offload_after_s=10)
+
+
+def two_returning(gap_s=50):
+    return [raw_session(sid, 0, [raw_req(1000, 100, user=True, gap=int(gap_s * 1000), cat="Read"),
+                                 raw_req(1100, 100, lcp=1000)]) for sid in ("X", "Y")]
+
+
+def test_shared_link_makes_simultaneous_reloads_queue():
+    # both caches go to CPU over the 50 s tool call and are reloaded on demand (the prefetch is set too
+    # late to help): each reload is 0.55 s, and on one link the second waits for the first
+    kw = dict(profile=CPU, slots=2, offload_after_s=10, prefetch_margin_s=-100)
+    apart = run(two_returning(), **kw)
+    shared = run(two_returning(), shared_link=True, **kw)
+    assert sorted(t.latency for t in apart.turns) == pytest.approx([53.55, 53.55])
+    assert sorted(t.latency for t in shared.turns) == pytest.approx([53.55, 54.1])
+    assert shared.link_wait == pytest.approx(0.55)
+
+
+def test_a_full_cpu_tier_keeps_only_part_of_a_prefix():
+    # 1500 tokens of CPU for two 1100-token prefixes: the first stored loses 700, recomputed at 1 ms each
+    sim = run(two_returning(), profile=CPU, slots=2, offload_after_s=10, prefetch_margin_s=-100, cpu_tokens=1500)
+    assert sorted(t.latency for t in sim.turns) == pytest.approx([53.55, 2 + 50 + 0.2 + 0.7 + 1])
+    assert sim.cpu_used <= 1500
+
+
+def pin_case():
+    # X pauses for a 1 s tool at t=2; W ends at 2.1; Y arrives at 2.5 needing 1000 more tokens than are free.
+    # LRU cuts X (idle longest), which then recomputes 1000 tokens (1 s) when its tool returns at 3.
+    return [raw_session("X", 0, [raw_req(1000, 100, user=True, gap=1000, cat="Read"), raw_req(1100, 100, lcp=1000)]),
+            raw_session("W", 0.1, [raw_req(1000, 100, user=True)]),
+            raw_session("Y", 2.5, [raw_req(1000, 100, user=True)])]
+
+
+def x_latency(sim):
+    return next(t.latency for t in sim.turns if t.z == pytest.approx(4.0))
+
+
+def test_continuum_pin_keeps_a_cache_through_its_tool_call():
+    raw = pin_case()
+    lru = run(raw, kv_tokens=2300, slots=2)
+    # TTL: one past Read gap of 1 s; restoring 1100 tokens costs 1.1 s > 1 s, so the cache is pinned for 1 s
+    pinned = run(raw, kv_tokens=2300, slots=2, pin="ttl", cheap=cheap_for(raw))
+    assert x_latency(lru) == pytest.approx(2 + 1 + 1.0 + 1)
+    assert x_latency(pinned) == pytest.approx(2 + 1 + 1)
+    assert pinned.pinned_evicted == 0
+
+
+def test_continuum_ttl_is_zero_when_restoring_is_cheaper_than_waiting():
+    raw = pin_case()
+    raw[0]["requests"][0]["gap"] = 5000                  # a 5 s tool costs more to wait for than 1.1 s of prefill
+    sim = run(raw, kv_tokens=2300, slots=2, pin="ttl", cheap=cheap_for(raw))
+    assert x_latency_gap(sim, 5) == pytest.approx(2 + 5 + 1.0 + 1)
+
+
+def x_latency_gap(sim, gap):
+    return next(t.latency for t in sim.turns if t.z == pytest.approx(2 + gap + 1))
+
+
+def test_cachewise_evicts_a_session_waiting_on_its_user_before_one_in_a_tool_call():
+    raw = pin_case()
+    sim = run(raw, kv_tokens=2300, slots=2, eviction="cachewise", cheap=cheap_for(raw))
+    assert x_latency(sim) == pytest.approx(2 + 1 + 1)
+
+
+def test_fewest_tokens_first():
+    # one slot busy until 1 s; A (1000-token prompt) and B (100) wait: B goes first under "fewest"
+    raw = [single("hog", 0, prompt=0, completion=100), single("A", 0.2, prompt=1000, completion=100),
+           single("B", 0.4, prompt=100, completion=100)]
+    fcfs = run(raw, slots=1)
+    fewest = run(raw, slots=1, policy="fewest")
+    a, b = 1000 * 0.001 + 1.0, 100 * 0.001 + 1.0
+    assert sorted(t.latency for t in fcfs.turns) == pytest.approx(sorted([1.0, 1 + a - 0.2, 1 + a + b - 0.4]))
+    assert sorted(t.latency for t in fewest.turns) == pytest.approx(sorted([1.0, 1 + b - 0.4, 1 + b + a - 0.2]))
