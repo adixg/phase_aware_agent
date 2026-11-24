@@ -164,6 +164,44 @@ def depth_section(path: str) -> None:
 FORECAST_VARIANTS = (("predfirst", "forecast, 1st turns"), ("predall", "forecast, all turns"), ("calls", "true call count"))
 
 
+def decompose_section(path: str) -> None:
+    """Which part of a session's future carries the oracle's gain, when a deadline covers the whole session.
+    Every variant is the same LLF/SRPT policy; only what it is told about the remaining calls changes."""
+    att, mean_l = load(path), load(path, "mean_latency")
+    if not any(pol.endswith("_ucount") for c in att.values() for pol, _, _ in c):
+        return      # swept without --decompose
+    steps = [("history", "cheap"), ("turn", "ucur"), ("+ turns", "ucount"), ("all calls", "calls"), ("oracle", "oracle")]
+    best_of = lambda c, suffix: best(c, [(f"{f}_{suffix}", "lru") for f in ("llf", "srpt")])[1]
+    cells = {k: c for k, c in att.items() if k[2] in REALISTIC_KV}
+    print("\n\nWhere a session oracle's gain comes from (deadlines over whole sessions; eviction lru, realistic KV sizes)")
+    print("Each column is the better of LLF and SRPT told more of the future: the calls left in the user's current turn")
+    print("(`turn`), plus the true number of turns still to come at the average size (`+ turns`), the true call count of the")
+    print("whole session (`all calls`), and everything (`oracle`). `history` knows none of it. Attainment %, mean over cells.")
+    print("%6s %6s | %7s %8s %8s %9s %9s %8s | share of the history-to-oracle gap closed by: turn / + turns / all calls" % (
+        "KV", "cells", "EDF", *[n for n, _ in steps]))
+    for kv in sorted({k[2] for k in cells}):
+        ks = [k for k in cells if k[2] == kv]
+        edf = [mean(cells[k], ("edf", "lru")) for k in ks]
+        cols = [[best_of(cells[k], suf) for k in ks] for _, suf in steps]
+        if any(x is None for x in edf) or any(x is None for col in cols for x in col):
+            continue
+        m = [100 * st.mean(col) for col in cols]
+        gap_total = m[4] - m[0]
+        share = ["%4.0f%%" % (100 * (m[i] - m[0]) / gap_total) if gap_total > 0.05 else "   n/a" for i in (1, 2, 3)]
+        print("%5dM %6d | %6.1f%% %7.1f%% %7.1f%% %8.1f%% %8.1f%% %7.1f%% | %s / %s / %s" % (
+            kv / 1e6, len(ks), 100 * st.mean(edf), *m, *share))
+    print("\nMean latency, percent faster than attained service (pure shortest-remaining-time first; unlimited memory and realistic KV sizes)")
+    print("%6s | %8s %8s %9s %9s %8s" % ("KV", "history", "turn", "+ turns", "all calls", "oracle"))
+    names = [("psrpt_cheap", "lru"), ("psrpt_ucur", "lru"), ("psrpt_ucount", "lru"), ("psrpt_calls", "lru"), ("psrpt_oracle", "lru")]
+    for kv in sorted({k[2] for k in mean_l if k[2] == 0 or k[2] in REALISTIC_KV}):
+        ks = [k for k in mean_l if k[2] == kv]
+        vals = [[reduction(mean_l[k], n) for k in ks] for n in names]
+        if any(x is None for col in vals for x in col):
+            continue
+        print("%6s | %+7.1f%% %+7.1f%% %+8.1f%% %+8.1f%% %+7.1f%%" % (
+            "inf" if kv == 0 else "%dM" % (kv / 1e6), *[st.mean(col) for col in vals]))
+
+
 def forecast_section(path: str) -> None:
     """What the fitted admission forecaster buys over history, against the ceiling of knowing the call count."""
     att, mean_l = load(path), load(path, "mean_latency")
@@ -235,6 +273,7 @@ def main(path: str) -> None:
         ladder_section(cells)
         forecast_section(path)
         online_section(path)
+        decompose_section(path)
         jct_section(path)
         return
     verdicts = defaultdict(list)
@@ -289,6 +328,7 @@ def main(path: str) -> None:
     depth_section(path)
     forecast_section(path)
     online_section(path)
+    decompose_section(path)
     jct_section(path)
 
     print("\n\nVerdict on attainment (realistic KV: 1, 2, 4M tokens; unlimited memory also counted for admission)")

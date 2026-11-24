@@ -41,6 +41,10 @@ class Policy:
     lookahead: int | None = None  # true service and gaps for the next k requests of the turn (this one
                                   # included), historical averages beyond; overrides the three flags
     pure: bool = False        # no deadline logic: a turn judged lost is not pushed behind the others
+    scope: str | None = None  # how much of a session's future is true when a deadline covers the whole session
+                              # (the oracle decomposition): "cur" = the calls left in the current user turn, the
+                              # later turns from the history table; "count" = the same plus the true number of
+                              # later turns, each at the average size. Everything else stays historical.
     forecast: str | None = None   # remaining calls from a fitted admission forecaster instead of the Cheap
                                   # table: "first" = first user turn of a session only (what the predictor
                                   # was built for; later turns fall back to Cheap), "all" = every turn,
@@ -72,6 +76,8 @@ for _fam, _kind, _pure in (("llf", "llf", False), ("srpt", "srpt", False), ("psr
     POLICIES[f"{_fam}_predfirst"] = Policy(_kind, pure=_pure, forecast="first")
     POLICIES[f"{_fam}_predall"] = Policy(_kind, pure=_pure, forecast="all")
     POLICIES[f"{_fam}_online"] = Policy(_kind, pure=_pure, forecast="online")
+    POLICIES[f"{_fam}_ucur"] = Policy(_kind, pure=_pure, scope="cur")
+    POLICIES[f"{_fam}_ucount"] = Policy(_kind, pure=_pure, scope="count")
 for _k in LOOKAHEAD_DEPTHS:
     POLICIES[f"llf_la{_k}"] = Policy("llf", lookahead=_k)
     POLICIES[f"srpt_la{_k}"] = Policy("srpt", lookahead=_k)
@@ -98,6 +104,10 @@ class Req:
     rem_service: float = 0.0
     rem_gaps: float = 0.0
     nxt: "Req | None" = field(default=None, compare=False, repr=False)  # next request of the turn
+    uturn: int = 0        # which user message this request answers (0 = the session's first), whatever the deadline unit
+    rem_uturn: int = 0    # requests left in this user turn, this one included
+    fut_turns: int = 0    # user turns still to come after this one
+    fut_calls: int = 0    # requests in those later turns
     pred_first: float = 0.0   # forecast remaining calls (this one included), first user turns only; 0 = none
     pred_all: float = 0.0     # the same, from a forecaster fitted on every turn
     pred_online: float = 0.0  # online forecaster at this request's admission: remaining calls, this one included
@@ -156,10 +166,11 @@ def build_sessions(raw: list[dict], profile: Profile, max_think_s: float = 3600.
     t0 = min(s["start"] for s in raw)
     out = []
     for s in sorted(raw, key=lambda s: (s["start"], s["sid"])):
-        reqs, rs, turn, step = [], s["requests"], -1, 0
+        reqs, rs, turn, step, uturns = [], s["requests"], -1, 0, []
         for i, r in enumerate(rs):
             if i == 0 or (r["user"] and unit == "turn"):
                 turn, step = turn + 1, 0
+            uturns.append((uturns[-1] + 1 if uturns else 0) if i and r["user"] else (uturns[-1] if uturns else 0))
             base = 0
             if i:
                 base = r["lcp"] + (rs[i - 1]["completion"] if r["append"] else 0)
@@ -177,9 +188,23 @@ def build_sessions(raw: list[dict], profile: Profile, max_think_s: float = 3600.
         for a, b in zip(reqs, reqs[1:]):
             if not a.last_in_turn:
                 a.nxt = b
+        _user_turns(reqs, uturns)
         out.append(Session(s["sid"], (s["start"] - t0) / 1000, reqs, _annotate(reqs, profile),
                            s.get("harness"), _turn_meta(rs, reqs)))
     return out
+
+
+def _user_turns(reqs: list[Req], uturns: list[int]) -> None:
+    """Where each user message's turn starts and ends, which a session-level deadline otherwise hides:
+    the requests left in this user turn, and the turns and requests still to come after it."""
+    last, left, later = uturns[-1], 0, 0         # `later` counts the requests of turns after the current one
+    for i in range(len(reqs) - 1, -1, -1):
+        r, u = reqs[i], uturns[i]
+        if i + 1 < len(reqs) and uturns[i + 1] != u:
+            later += left                        # stepped back into the previous user turn: the one just left is "later"
+            left = 0
+        left += 1
+        r.uturn, r.rem_uturn, r.fut_turns, r.fut_calls = u, left, last - u, later
 
 
 def _turn_meta(raw: list[dict], reqs: list[Req]) -> list[TurnMeta]:
@@ -223,8 +248,14 @@ class Cheap:
         self.profile = profile
         by_key, by_step, gaps = defaultdict(list), defaultdict(list), defaultdict(list)
         completions, news, tool_gaps = [], [], []
+        by_user_turn, turn_sizes = defaultdict(list), []      # per user turn, not per request
         for s in sessions:
+            started = set()
             for r in s.reqs:
+                if r.uturn not in started:
+                    started.add(r.uturn)
+                    by_user_turn[step_bucket(r.uturn)].append(r.fut_calls)
+                    turn_sizes.append(r.rem_uturn)
                 k = step_bucket(r.step)
                 by_key[(k, r.prev_cat)].append(r.rem_calls)
                 by_step[k].append(r.rem_calls)
@@ -236,6 +267,10 @@ class Cheap:
                     NEVER_S if r.gap is None else r.gap)
         self.calls = {k: sum(v) / len(v) for k, v in by_key.items() if len(v) >= MIN_BUCKET}
         self.calls_step = {k: sum(v) / len(v) for k, v in by_step.items()}
+        self.fut_calls_by_turn = {k: sum(v) / len(v) for k, v in by_user_turn.items() if len(v) >= MIN_BUCKET}
+        every = [x for v in by_user_turn.values() for x in v]
+        self.fut_calls_all = sum(every) / len(every) if every else 0.0
+        self.calls_per_uturn = sum(turn_sizes) / len(turn_sizes) if turn_sizes else 1.0
         self.completion = sum(completions) / len(completions)
         self.gap = sum(tool_gaps) / len(tool_gaps)
         self.service = (profile.overhead_ms + profile.prefill_ms * sum(news) / len(news)
@@ -251,6 +286,15 @@ class Cheap:
     def remaining_calls(self, r: Req) -> float:
         k = step_bucket(r.step)
         return max(1.0, self.calls.get((k, r.prev_cat), self.calls_step.get(k, 1.0)))
+
+    def future_calls(self, uturn: int) -> float:
+        """Requests expected in the user turns after this one, from the turn index alone: the average over
+        training sessions that reached this turn (so it conditions on survival). Sparse late turns borrow
+        the nearest earlier turn that has enough sessions."""
+        for k in range(step_bucket(uturn), -1, -1):
+            if k in self.fut_calls_by_turn:
+                return self.fut_calls_by_turn[k]
+        return self.fut_calls_all
 
     def time_to_next_use(self, cat: str, elapsed: float) -> float:
         """Mean residual gap: E[G - t | G > t] for this tool category, given t already elapsed."""
@@ -281,6 +325,9 @@ def estimate_remaining(r: Req, p: Policy, cheap: Cheap, profile: Profile) -> flo
     if p.lookahead is not None:
         return estimate_windowed(r, p.lookahead, cheap)
     n = float(r.rem_calls) if p.calls else cheap.remaining_calls(r)
+    if p.scope:                       # a session-level deadline: split the remaining calls into this user turn and the rest
+        later = cheap.future_calls(r.uturn) if p.scope == "cur" else r.fut_turns * cheap.calls_per_uturn
+        n = float(r.rem_uturn) + later
     if p.forecast:
         forecast = getattr(r, f"pred_{p.forecast}")
         n = forecast if forecast > 0 else n

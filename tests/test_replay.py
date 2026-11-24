@@ -343,3 +343,76 @@ def test_preempted_in_decode_keeps_its_output_so_far():
     # A keeps 1050 tokens; B needs 1100 of the 950 free, so 150 of A's go. A resumes at 3.5 with
     # 900 of its 1050-token prompt cached: 0.15 s prefill + 0.5 s for its last 50 tokens
     assert by_budget[100.0].latency == pytest.approx(3.5 + 0.15 + 0.5)
+
+
+# ---- the session oracle split into the user turn, the number of turns to come, and their sizes
+
+def three_turns(sid="a", start=0.0):
+    """User turns of 3, 1 and 2 requests."""
+    return raw_session(sid, start, [
+        raw_req(1000, 100, user=True, gap=1000, cat="Read"), raw_req(1000, 100, gap=1000, cat="Read"),
+        raw_req(1000, 100, gap=2000, cat="Read"),
+        raw_req(1000, 100, user=True, gap=3000, cat="Read"),
+        raw_req(1000, 100, user=True, gap=1000, cat="Read"), raw_req(1000, 100, gap=None),
+    ])
+
+
+@pytest.mark.parametrize("unit", ["turn", "session"])
+def test_user_turn_fields_are_the_same_whatever_the_deadline_unit(unit):
+    sess = build_sessions([three_turns()], PROFILE, unit=unit)[0]
+    got = [(r.uturn, r.rem_uturn, r.fut_turns, r.fut_calls) for r in sess.reqs]
+    assert got == [(0, 3, 2, 3), (0, 2, 2, 3), (0, 1, 2, 3), (1, 1, 1, 2), (2, 2, 0, 0), (2, 1, 0, 0)]
+
+
+def test_a_session_deadline_still_treats_the_session_as_one_turn():
+    sess = build_sessions([three_turns()], PROFILE, unit="session")[0]
+    assert len(sess.z) == 1 and sess.reqs[0].rem_calls == 6
+
+
+def history_of_two_turn_sessions(n=25):
+    raw = [raw_session(f"s{i}", i, [raw_req(1000, 100, user=True, gap=1000, cat="Read"), raw_req(1000, 100),
+                                    raw_req(1000, 100, user=True, gap=None)]) for i in range(n)]
+    raw = [dict(s, requests=[dict(r, gap=(1000 if j == 1 else r["gap"])) for j, r in enumerate(s["requests"])]) for s in raw]
+    return Cheap(build_sessions(raw, PROFILE, unit="session"), PROFILE)
+
+
+def test_history_knows_the_turn_index_and_borrows_from_earlier_turns_when_sparse():
+    cheap = history_of_two_turn_sessions()
+    assert cheap.future_calls(0) == pytest.approx(1.0)         # turns of 2 then 1: one request after the first turn
+    assert cheap.future_calls(1) == pytest.approx(0.0)
+    assert cheap.future_calls(7) == pytest.approx(0.0)         # nobody reached turn 7: the nearest earlier turn answers
+    assert cheap.calls_per_uturn == pytest.approx(1.5)
+
+
+def test_policies_for_the_decomposition_exist_and_pure_ones_keep_no_deadline_logic():
+    for fam in ("llf", "srpt", "psrpt"):
+        assert POLICIES[f"{fam}_ucur"].scope == "cur" and POLICIES[f"{fam}_ucount"].scope == "count"
+    assert POLICIES["psrpt_ucur"].pure and not POLICIES["llf_ucur"].pure
+
+
+def test_knowing_the_count_of_later_turns_changes_only_the_later_turns_term():
+    cheap = history_of_two_turn_sessions()
+    r = build_sessions([three_turns()], PROFILE, unit="session")[0].reqs[0]
+    est = lambda name: estimate_remaining(r, POLICIES[name], cheap, PROFILE)
+    per_call = cheap.service + cheap.gap
+    # current turn true (3 calls) plus 1.0 expected later, against 2 later turns of 1.5 calls each
+    assert est("llf_ucount") - est("llf_ucur") == pytest.approx((2 * 1.5 - cheap.future_calls(0)) * per_call)
+    # the history estimate and the current-turn estimate differ only in their call count
+    assert est("llf_ucur") - est("llf_cheap") == pytest.approx(
+        ((3 + cheap.future_calls(0)) - cheap.remaining_calls(r)) * per_call)
+
+
+def test_with_nothing_left_after_this_turn_the_count_variant_is_exactly_the_turn():
+    cheap = history_of_two_turn_sessions()
+    last = build_sessions([three_turns()], PROFILE, unit="session")[0].reqs[-2]    # first request of the final turn
+    assert last.fut_turns == 0
+    prefill = (PROFILE.overhead_ms + PROFILE.prefill_ms * (last.prompt - last.base)) / 1000
+    expected = prefill + PROFILE.decode_ms * cheap.completion / 1000 + (last.rem_uturn - 1) * (cheap.service + cheap.gap)
+    assert estimate_remaining(last, POLICIES["llf_ucount"], cheap, PROFILE) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("policy", ["llf_ucur", "llf_ucount", "srpt_ucur", "psrpt_ucount"])
+def test_the_decomposition_policies_run(policy):
+    raw = [three_turns("a", 0), three_turns("b", 1)]
+    sim = run(raw, slots=1, policy=policy, budgets=budgets_for(raw, {"a": 30.0, "b": 30.0}), cheap=cheap_for(raw))
+    assert len(sim.turns) == 6

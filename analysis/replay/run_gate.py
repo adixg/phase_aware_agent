@@ -62,6 +62,12 @@ ADMISSION_ONLINE = [f"{f}_online" for f in ("llf", "srpt", "psrpt")]
 PAIRS_ONLINE = [(a, "lru") for a in ADMISSION_ONLINE] + \
     [(a, "online") for a in ("fcfs", "edf", "llf_cheap", "srpt_cheap", "llf_online", "srpt_online")]
 
+# the session oracle split in parts, for deadlines that cover a whole session (--unit session): the true calls left in
+# the user's current turn, then also the true number of turns to come, against history and the true call count;
+# opt in with --decompose
+ADMISSION_DECOMPOSE = [f"{f}_{v}" for f in ("llf", "srpt", "psrpt") for v in ("ucur", "ucount")] + ["psrpt_calls"]
+PAIRS_DECOMPOSE = [(a, "lru") for a in ADMISSION_DECOMPOSE]
+
 _G: dict = {}
 
 
@@ -129,6 +135,9 @@ def main() -> None:
     ap.add_argument("--online", default="", metavar="SIDECAR",
                     help="also run the policies that take the online forecaster's predictions from this sidecar "
                          "file (analysis/replay/online_sidecar.py); only sessions it covers get predictions")
+    ap.add_argument("--decompose", action="store_true",
+                    help="also run the policies that split a session's future into the current user turn and the "
+                         "turns to come (meant for --unit session)")
     ap.add_argument("--only", default="",
                     help="comma list of admission policies to run (default: all selected); lets a forecast "
                          "comparison skip the sweep's other policies")
@@ -162,7 +171,7 @@ def main() -> None:
 
     loads = [float(x) for x in args.loads.split(",")]
     pairs = PAIRS + (PAIRS_LOOKAHEAD if args.lookahead else []) + (PAIRS_FORECAST if args.forecast else []) + \
-        (PAIRS_ONLINE if args.online else [])
+        (PAIRS_ONLINE if args.online else []) + (PAIRS_DECOMPOSE if args.decompose else [])
     pairs = list(dict.fromkeys(pairs))
     if args.only:
         keep = set(args.only.split(","))

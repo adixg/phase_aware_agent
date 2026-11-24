@@ -19,7 +19,10 @@
 # or forecast_l40s (opt-in, ~3 min: Andrew's admission forecaster on the validation days Aug 30-Sep 1 only, so
 # the predictor's held-out split Sep 2-5 stays untouched; report it with report.py on its own file)
 # or online_l40s (opt-in, exploratory: the online forecaster's predictions, built by
-# python -m analysis.replay.online_sidecar, on the same days, with the admission forecaster for reference). WORKERS defaults to the cores Slurm allocated, else the core count minus two.
+# python -m analysis.replay.online_sidecar, on the same days, with the admission forecaster for reference)
+# or decompose_l40s (opt-in, ~12 min: deadlines over whole sessions with a fixed 5 s reply, class and proportional, with the
+# session oracle split into the user's current turn, the number of turns to come, and their sizes; results in DOUT, default
+# data/freeinference/gate_session_reply5; read with report.py). WORKERS defaults to the cores Slurm allocated, else the core count minus two.
 # Deadline unit and user reply time (analysis/replay/sim.py) are knobs; the defaults are the first runs,
 # one deadline per turn and the trace's own pauses. Session-level deadlines with a fixed 5 s reply:
 #
@@ -44,7 +47,7 @@ want() { [[ ",$SWEEPS," == *",all,"* || ",$SWEEPS," == *",$1,"* ]]; }
 IFS=, read -ra REQUESTED <<< "$SWEEPS"
 for s in "${REQUESTED[@]}"; do
   case $s in
-    all|class_l40s|prop_l40s|class_offload|class_trace|class_l40s_slots16|forecast_l40s|online_l40s) ;;
+    all|class_l40s|prop_l40s|class_offload|class_trace|class_l40s_slots16|forecast_l40s|online_l40s|decompose_l40s) ;;
     *) echo "unknown sweep: $s" >&2; exit 2 ;;
   esac
 done
@@ -76,4 +79,12 @@ FORECAST_POLICIES=las,edf,llf_cheap,srpt_cheap,llf_calls,srpt_calls,llf_oracle,s
 [[ ",$SWEEPS," == *",forecast_l40s,"* ]] && $RUN $PY analysis/replay/run_gate.py --out $OUT/forecast_l40s.jsonl --profiles l40s --tight 0.5,1,2 --days 2026-08-30,2026-08-31,2026-09-01 --forecast --only $FORECAST_POLICIES "${GRID[@]}"
 ONLINE_POLICIES=$FORECAST_POLICIES,fcfs,llf_online,srpt_online,psrpt_online
 [[ ",$SWEEPS," == *",online_l40s,"* ]] && $RUN $PY analysis/replay/run_gate.py --out $OUT/online_l40s.jsonl --profiles l40s --tight 0.5,1,2 --days 2026-08-30,2026-08-31,2026-09-01 --forecast --online data/freeinference/online/sidecar_val.csv.gz --only $ONLINE_POLICIES "${GRID[@]}"
+DECOMPOSE_POLICIES=las,edf,llf_cheap,srpt_cheap,llf_calls,srpt_calls,llf_oracle,srpt_oracle,psrpt_cheap,psrpt_calls,psrpt_oracle,llf_ucur,llf_ucount,srpt_ucur,srpt_ucount,psrpt_ucur,psrpt_ucount
+DOUT=${DOUT:-data/freeinference/gate_session_reply5}
+DGRID=(--loads $LOADS --kv 0,1000000,2000000,4000000 --unit session --reply fixed:5 --decompose --only $DECOMPOSE_POLICIES --workers $WORKERS)
+if [[ ",$SWEEPS," == *",decompose_l40s,"* ]]; then
+  mkdir -p $DOUT
+  $RUN $PY analysis/replay/run_gate.py --out $DOUT/decompose_class_l40s.jsonl --profiles l40s --tight 0.5,1,2 "${DGRID[@]}"
+  $RUN $PY analysis/replay/run_gate.py --out $DOUT/decompose_prop_l40s.jsonl --profiles l40s --mode proportional --tight 1.2,1.5,2,3 "${DGRID[@]}"
+fi
 true
