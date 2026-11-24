@@ -18,10 +18,12 @@ import csv
 import gzip
 import json
 import os
+import sys
 
 import numpy as np
 
 from analysis.dag import tool_gates as G
+from analysis.dag.dataset import CATS
 from prediction.predictor.tool_baseline import CLASSES, CODE, END, ToolForecaster
 
 ROWS = "data/freeinference/dag/online_rows.csv.gz"
@@ -54,9 +56,11 @@ def load(path: str, days) -> list[dict]:
                 c = r["prev1_cat"] or END
                 answer[key] = c if c in CODE else "Other"
                 continue
-            out = {k: r[k] or None for k in STR}
+            out = {k: sys.intern(r[k]) if r[k] else None for k in STR}
             out.update({k: (float(r[k]) if r[k] != "" else None) for k in FLOAT})
-            out.update({k: (r[k] or None) for k in CATEGORY})
+            out.update({k: (sys.intern(r[k]) if r[k] else None) for k in CATEGORY})
+            counts = [float(r[f"cat_{c}"] or 0) for c in CATS]
+            out["dom"] = CATS[counts.index(max(counts))] if max(counts) > 0 else None     # most used tool so far in the turn
             out.update(step=int(r["step"]), turn=int(r["turn"]), _key=key)
             rows.append(out)
     for r in rows:
@@ -109,12 +113,12 @@ def passes(result: dict) -> bool:
     return result["reduction"] >= G.OFFLINE_MIN and result["ci"][0] > 0
 
 
-def best_baseline(fit, tune) -> int:
+def best_baseline(fit, tune, steps=G.GATE_STEPS) -> int:
     """The baseline's own tuning: its best smoothing strength on the tuning days (mean Brier over the gate steps)."""
     scored = []
     for s in BASELINE_STRENGTHS:
         b = ToolForecaster(fit, BASELINE, s)
-        scored.append((np.mean([scores(b, [r for r in tune if r["step"] == t])["brier"].mean() for t in G.GATE_STEPS]), s))
+        scored.append((np.mean([scores(b, [r for r in tune if r["step"] == t])["brier"].mean() for t in steps]), s))
     return min(scored)[1]
 
 

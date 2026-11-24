@@ -12,6 +12,9 @@ coded as an integer so the hierarchy's marginal over one target gives the distri
 The previous-tool table (the baseline) is the chain ("cat",): step bucket, then the previous round's first
 tool category. Every model chain starts with "cat", so it contains the baseline.
 
+The level "dom" is the tool category the turn has used most so far (analysis/dag/tool_eval.py works it out from the
+turn's tool-category counts), None before the first tool.
+
 Rows are the dicts analysis/dag/tool_eval.py builds from online_rows.csv.gz, numbers parsed (None for missing).
 """
 
@@ -26,7 +29,7 @@ from .online_baseline import Hierarchy, bucket, quantile_edges, step_bucket
 END = "__none__"
 CLASSES = tuple(CATS) + (END,)
 CODE = {c: i for i, c in enumerate(CLASSES)}
-LEVELS = ("cat", "cat2", "cat3", "err", "finish", "width", "result", "harness", "model")
+LEVELS = ("cat", "cat2", "cat3", "err", "finish", "width", "result", "harness", "model", "dom")
 
 
 class ToolForecaster:
@@ -53,7 +56,7 @@ class ToolForecaster:
             return None if row["prev1_width"] is None else min(row["prev1_width"], 4)
         if level == "result":
             return bucket(row["prev1_result_tokens"], self.edges["result"])
-        return row[level]                       # harness, model
+        return row[level]                       # harness, model, dom (the turn's most used tool so far, None before any)
 
     def inputs(self, row: dict) -> tuple:
         return (step_bucket(row["step"]),) + tuple(self.label(row, lv) for lv in self.levels)

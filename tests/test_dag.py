@@ -2,7 +2,12 @@
 
 from collections import Counter
 
-from analysis.dag.build import WEEKS, session_turns, strip_blocks, to_graph
+import json
+
+import pytest
+import zstandard
+
+from analysis.dag.build import WEEKS, build_day, plan, session_turns, strip_blocks, to_graph
 
 
 def call(i, name="Read", lat=1000, sub=None):
@@ -92,3 +97,36 @@ def test_census_overlap_and_quantiles():
     assert max_overlap([(0, 10), (5, 15), (12, 20)]) == 2
     assert max_overlap([(0, 10), (10, 20)]) == 1          # touching is not overlapping
     assert quantiles(list(range(100))) == [50, 90, 99]
+
+
+def shard(path, sid, day="2026-06-20"):
+    s = dict(session([req(0, 1000, [call(0)], "user"), req(2000, 3000)]), session_id=sid, day=day)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(zstandard.ZstdCompressor().compress(json.dumps(s).encode() + b"\n"))
+
+
+def test_a_boundary_day_in_two_weekly_shards_is_merged_not_overwritten(tmp_path):
+    root = tmp_path / "release"
+    shard(root / "2026-06-14_2026-06-20" / "traces" / "2026-06-20.jsonl.zst", "early")
+    shard(root / "2026-06-21_2026-06-27" / "traces" / "2026-06-20.jsonl.zst", "late")
+    shard(root / "2026-06-21_2026-06-27" / "traces" / "2026-06-21.jsonl.zst", "next", "2026-06-21")
+    shards = plan(str(root), "all")
+    assert [d for d, _ in shards] == ["2026-06-20", "2026-06-20", "2026-06-21"]
+    out, seen = tmp_path / "dag", set()
+    out.mkdir()
+    for day, path in shards:
+        build_day(path, str(out / f"{day}.jsonl"), Counter(), append=day in seen)
+        seen.add(day)
+    ids = [json.loads(line)["session"] for line in (out / "2026-06-20.jsonl").read_text().splitlines()]
+    assert ids == ["early", "late"] and (out / "2026-06-21.jsonl").exists()
+
+
+def test_the_plan_skips_the_held_out_days_unless_asked_and_rejects_unknown_weeks(tmp_path):
+    root = tmp_path / "release"
+    shard(root / "2026-08-30_2026-09-05" / "traces" / "2026-09-01.jsonl.zst", "ok", "2026-09-01")
+    shard(root / "2026-08-30_2026-09-05" / "traces" / "2026-09-02.jsonl.zst", "held", "2026-09-02")
+    assert [d for d, _ in plan(str(root), "all")] == ["2026-09-01"]
+    assert [d for d, _ in plan(str(root), "all", include_heldout=True)] == ["2026-09-01", "2026-09-02"]
+    assert [d for d, _ in plan(str(root), "2026-08-30_2026-09-05", days="2026-09-01")] == ["2026-09-01"]
+    with pytest.raises(SystemExit):
+        plan(str(root), "no-such-week")

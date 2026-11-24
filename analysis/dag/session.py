@@ -32,7 +32,7 @@ import os
 import random
 from collections import defaultdict
 
-from analysis.dag.dataset import NA, load_sessions, mean, turn_summary
+from analysis.dag.dataset import NA, day_files, load_sessions, mean, turn_summary
 
 META = ["session", "user", "day", "turn"]
 FEATURES = ["harness", "model", "turn_idx", "first_prompt", "idle_before_s", "elapsed_s", "prior_mean_calls",
@@ -54,14 +54,22 @@ def session_view(turns: list[dict], u: int) -> dict:
 
 
 class SessionHistory:
-    """Per user, the sessions sorted by end time with running sums: 'sessions that ended before T' is a binary search."""
+    """Per user, the sessions sorted by end time with running sums: 'sessions that ended before T' is a binary search.
+    Built from sessions all at once, or a few at a time with `add` and then `finish` (a large folder is streamed)."""
 
-    def __init__(self, sessions: list[list[dict]]):
-        by_user = defaultdict(list)
-        for turns in sessions:
-            by_user[turns[0]["user"]].append((turns[-1]["end"], len(turns), sum(len(t["rounds"]) for t in turns)))
+    def __init__(self, sessions: list[list[dict]] | None = None):
+        self.rows = defaultdict(list)
         self.ends, self.cum = {}, {}
-        for user, rows in by_user.items():
+        if sessions is not None:
+            self.add(sessions)
+            self.finish()
+
+    def add(self, sessions: list[list[dict]]) -> None:
+        for turns in sessions:
+            self.rows[turns[0]["user"]].append((turns[-1]["end"], len(turns), sum(len(t["rounds"]) for t in turns)))
+
+    def finish(self) -> "SessionHistory":
+        for user, rows in self.rows.items():
             rows.sort()
             self.ends[user] = [r[0] for r in rows]
             acc, a, b = [(0, 0)], 0, 0
@@ -69,6 +77,8 @@ class SessionHistory:
                 a, b = a + n, b + c
                 acc.append((a, b))
             self.cum[user] = acc
+        self.rows = defaultdict(list)
+        return self
 
     def before(self, user: str, T: int) -> dict:
         n = bisect.bisect_left(self.ends.get(user, []), T)       # sessions that ended strictly before T
@@ -140,27 +150,38 @@ def main() -> None:
     ap.add_argument("folder", nargs="?", default="data/freeinference/dag")
     ap.add_argument("--out", default=None, help="gzipped CSV; default <folder>/session_rows.csv.gz")
     ap.add_argument("--audit", type=int, default=0, help="rebuild this many turns from a scrambled future and compare")
+    ap.add_argument("--days", default="", help="comma list of days to write rows for (history still counts every day)")
     ap.add_argument("--history-from", default=None,
                     help="folder of earlier days whose sessions count toward account history (rows are written only "
                          "for the main folder)")
     args = ap.parse_args()
-    sessions = load_sessions(args.folder)
-    earlier = load_sessions(args.history_from) if args.history_from else []
-    hist = SessionHistory(earlier + sessions)
+    wanted = args.days.split(",") if args.days else None
+    files = day_files(args.folder)
+    hist = SessionHistory()
+    if args.history_from:                       # streamed a day at a time: a large folder does not fit in memory at once
+        for f in day_files(args.history_from):
+            hist.add(load_sessions(args.history_from, [f]))
+    for f in files:
+        hist.add(load_sessions(args.folder, [f]))
+    hist.finish()
     if args.audit:
+        sessions = load_sessions(args.folder, day_files(args.folder, wanted))
         raise SystemExit(1 if audit(sessions, hist, args.audit) else 0)
     out = args.out or os.path.join(args.folder, "session_rows.csv.gz")
-    n = 0
+    n = sessions_n = 0
     with gzip.open(out, "wt", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=COLUMNS)
         w.writeheader()
-        for turns in sessions:
-            for row in rows_of(turns, hist):
-                w.writerow({k: ("" if v is None else v) for k, v in row.items()})
-                n += 1
+        for f in day_files(args.folder, wanted):
+            sessions = load_sessions(args.folder, [f])
+            sessions_n += len(sessions)
+            for turns in sessions:
+                for row in rows_of(turns, hist):
+                    w.writerow({k: ("" if v is None else v) for k, v in row.items()})
+                    n += 1
     with open(out.replace(".csv.gz", "") + ".meta.json", "w") as fh:
-        json.dump({"columns": COLUMNS, "features": FEATURES, "labels": LABELS, "rows": n, "sessions": len(sessions)}, fh, indent=1)
-    print(f"{n:,} rows, {len(sessions):,} sessions -> {out}")
+        json.dump({"columns": COLUMNS, "features": FEATURES, "labels": LABELS, "rows": n, "sessions": sessions_n}, fh, indent=1)
+    print(f"{n:,} rows, {sessions_n:,} sessions -> {out}")
 
 
 if __name__ == "__main__":

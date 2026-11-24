@@ -133,8 +133,10 @@ def to_graph(turn: dict) -> tuple[list[dict], list[tuple[str, str]]]:
     return nodes, edges
 
 
-def build_day(path: str, out_path: str, stats: Counter) -> None:
-    with open(path, "rb") as fh, open(out_path, "wb") as out:
+def build_day(path: str, out_path: str, stats: Counter, append: bool = False) -> None:
+    """One day's shard. A day at a week boundary sits in both neighbouring weeks' releases with different sessions
+    (no root id repeats), so the second shard is appended to the first's file."""
+    with open(path, "rb") as fh, open(out_path, "ab" if append else "wb") as out:
         for line in io.BufferedReader(zstandard.ZstdDecompressor().stream_reader(fh)):
             s = orjson.loads(strip_blocks(line))
             del line
@@ -144,37 +146,57 @@ def build_day(path: str, out_path: str, stats: Counter) -> None:
                 out.write(orjson.dumps(turn) + b"\n")
 
 
+def plan(root: str, week: str, days: str = "", include_heldout: bool = False) -> list[tuple[str, str]]:
+    """(day, shard path) of every shard to build, in time order. `week` is train, test, all (every release week),
+    or the name of one release folder such as 2026-07-12_2026-07-18."""
+    if week in WEEKS:
+        folders = [WEEKS[week]]
+    elif week == "all":
+        folders = sorted(w for w in os.listdir(root) if os.path.isdir(os.path.join(root, w, "traces")))
+    elif os.path.isdir(os.path.join(root, week, "traces")):
+        folders = [week]
+    else:
+        raise SystemExit(f"unknown week {week!r}: use train, test, all, or a folder under {root}")
+    wanted = set(days.split(",")) if days else None
+    shards = []
+    for w in folders:
+        folder = os.path.join(root, w, "traces")
+        for name in sorted(os.listdir(folder)):
+            if not name.endswith(".jsonl.zst"):
+                continue
+            day = name[: -len(".jsonl.zst")]
+            if wanted and day not in wanted:
+                continue
+            if day >= HELDOUT_FROM and not include_heldout:
+                print(day, "skipped: held-out split (--include-heldout to build it)")
+                continue
+            if week == "test" and day == "2026-08-29":
+                continue                  # a 4-session fragment of a day the training week holds in full ("all" keeps it)
+            shards.append((day, os.path.join(folder, name)))
+    return shards
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--week", choices=list(WEEKS), default="train",
-                    help="train (Aug 23-29, the default) or test (Aug 30-Sep 5)")
+    ap.add_argument("--week", default="train",
+                    help="train (Aug 23-29, the default), test (Aug 30-Sep 5), all (every release week up to the "
+                         "held-out split), or one release folder name")
     ap.add_argument("--days", default="", help="comma list of days to build (default: the whole week)")
     ap.add_argument("--include-heldout", action="store_true",
                     help=f"allow days from {HELDOUT_FROM}, the held-out split reserved for one final evaluation")
     ap.add_argument("--root", default="data/freeinference/release")
     ap.add_argument("--out", default="data/freeinference/dag")
     args = ap.parse_args()
-    week = WEEKS[args.week]
-    folder = os.path.join(args.root, week, "traces")
     os.makedirs(args.out, exist_ok=True)
-    total = Counter()
-    for name in sorted(os.listdir(folder)):
-        if not name.endswith(".jsonl.zst"):
-            continue
-        day = name[: -len(".jsonl.zst")]
-        if args.days and day not in args.days.split(","):
-            continue
-        if day >= HELDOUT_FROM and not args.include_heldout:
-            print(day, "skipped: held-out split (--include-heldout to build it)")
-            continue
-        if args.week == "test" and day == "2026-08-29":
-            continue                      # a 4-session fragment of a day the training week holds in full
+    total, written = Counter(), set()
+    for day, path in plan(args.root, args.week, args.days, args.include_heldout):
         stats = Counter()
-        build_day(os.path.join(folder, name), os.path.join(args.out, f"{day}.jsonl"), stats)
+        build_day(path, os.path.join(args.out, f"{day}.jsonl"), stats, append=day in written)
+        written.add(day)
         total.update(stats)
         print(day, json.dumps(stats), flush=True)
     with open(os.path.join(args.out, "stats.json"), "w") as f:
-        json.dump({"week": week, **total}, f, indent=1)
+        json.dump({"week": args.week, **total}, f, indent=1)
 
 
 if __name__ == "__main__":

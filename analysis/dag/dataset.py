@@ -95,16 +95,24 @@ def prefix_view(turns: list[dict], ti: int, k: int) -> dict:
 
 
 class UserHistory:
-    """Per user, the turns sorted by end time with running sums, so 'before time T' is a binary search."""
+    """Per user, the turns sorted by end time with running sums, so 'before time T' is a binary search.
+    Built from sessions all at once, or a few at a time with `add` and then `finish` (a large folder is streamed)."""
 
-    def __init__(self, sessions: list[list[dict]]):
-        by_user = defaultdict(list)
+    def __init__(self, sessions: list[list[dict]] | None = None):
+        self.rows = defaultdict(list)
+        self.ends, self.cum = {}, {}
+        if sessions is not None:
+            self.add(sessions)
+            self.finish()
+
+    def add(self, sessions: list[list[dict]]) -> None:
         for turns in sessions:
             for t in turns:
                 s = turn_summary(t)
-                by_user[t["user"]].append((s["end"], s["rounds"], s["work"], s["fan"]))
-        self.ends, self.cum = {}, {}
-        for u, rows in by_user.items():
+                self.rows[t["user"]].append((s["end"], s["rounds"], s["work"], s["fan"]))
+
+    def finish(self) -> "UserHistory":
+        for u, rows in self.rows.items():
             rows.sort()
             self.ends[u] = [r[0] for r in rows]
             acc, a, b, c = [(0, 0.0, 0)], 0, 0.0, 0
@@ -112,6 +120,8 @@ class UserHistory:
                 a, b, c = a + n, b + w, c + f
                 acc.append((a, b, c))
             self.cum[u] = acc
+        self.rows = defaultdict(list)
+        return self
 
     def before(self, user: str, T: int) -> dict:
         n = bisect.bisect_left(self.ends.get(user, []), T)       # turns that ended strictly before T
@@ -198,10 +208,17 @@ def labels(t: dict) -> list[dict]:
     return out
 
 
-def load_sessions(folder: str) -> list[list[dict]]:
-    """Turns grouped by session, in time order within each (build.py writes a session's turns together)."""
+def day_files(folder: str, days=None) -> list[str]:
+    """The folder's per-day turn files in time order, optionally only the given days."""
+    files = sorted(glob.glob(os.path.join(folder, "2026-*.jsonl")))
+    return [f for f in files if days is None or os.path.basename(f)[:-len(".jsonl")] in set(days)]
+
+
+def load_sessions(folder: str, files: list[str] | None = None) -> list[list[dict]]:
+    """Turns grouped by session, in time order within each (build.py writes a session's turns together).
+    A day file holds whole sessions, so `files` can be a few days of a large folder."""
     sessions, cur, sid = [], [], None
-    for path in sorted(glob.glob(os.path.join(folder, "2026-*.jsonl"))):
+    for path in (day_files(folder) if files is None else files):
         for line in open(path, "rb"):
             t = orjson.loads(line)
             if t["session"] != sid and cur:

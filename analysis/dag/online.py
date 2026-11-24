@@ -40,8 +40,8 @@ import json
 import os
 import random
 
-from analysis.dag.dataset import (CATS, FEATURES, NA, PREV, UserHistory, annotate_session, features, load_sessions,
-                                  prefix_view)
+from analysis.dag.dataset import (CATS, FEATURES, NA, PREV, UserHistory, annotate_session, day_files, features,
+                                  load_sessions, prefix_view)
 
 EVENTS = ("A", "R")
 EVENT_NAMES = {"R": "root_response_completed"}       # A is `admission` at a turn's first request, else `request_admitted`
@@ -157,28 +157,36 @@ def main() -> None:
     ap.add_argument("folder", nargs="?", default="data/freeinference/dag")
     ap.add_argument("--out", default=None, help="gzipped CSV; default <folder>/online_rows.csv.gz")
     ap.add_argument("--audit", type=int, default=0, help="rebuild this many events from a scrambled future and compare")
+    ap.add_argument("--days", default="", help="comma list of days to write rows for (history still counts every day)")
     ap.add_argument("--history-from", default=None,
                     help="folder of earlier days whose turns count toward account history (rows are written only "
                          "for the main folder): a later week's users arrive with the history they already had")
     args = ap.parse_args()
-    sessions = load_sessions(args.folder)
-    earlier = load_sessions(args.history_from) if args.history_from else []
-    hist = UserHistory(earlier + sessions)
+    wanted = args.days.split(",") if args.days else None
+    hist = UserHistory()
+    for folder in ([args.history_from] if args.history_from else []) + [args.folder]:
+        for f in day_files(folder):             # streamed a day at a time: a large folder does not fit in memory at once
+            hist.add(load_sessions(folder, [f]))
+    hist.finish()
     if args.audit:
+        sessions = load_sessions(args.folder, day_files(args.folder, wanted))
         raise SystemExit(1 if audit(sessions, hist, args.audit) else 0)
     out = args.out or os.path.join(args.folder, "online_rows.csv.gz")
-    n = 0
+    n = sessions_n = 0
     with gzip.open(out, "wt", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=COLUMNS)
         w.writeheader()
-        for turns in sessions:
-            for row in rows_of(turns, hist):
-                w.writerow({k: ("" if v is None else v) for k, v in row.items()})
-                n += 1
+        for f in day_files(args.folder, wanted):
+            sessions = load_sessions(args.folder, [f])
+            sessions_n += len(sessions)
+            for turns in sessions:
+                for row in rows_of(turns, hist):
+                    w.writerow({k: ("" if v is None else v) for k, v in row.items()})
+                    n += 1
     with open(out.replace(".csv.gz", "") + ".meta.json", "w") as fh:
         json.dump({"columns": COLUMNS, "features": FEATURES, "resp": RESP, "labels": LABELS, "meta": META,
-                   "events": EVENTS, "cats": CATS, "prev": PREV, "rows": n, "sessions": len(sessions)}, fh, indent=1)
-    print(f"{n:,} rows, {len(sessions):,} sessions -> {out}")
+                   "events": EVENTS, "cats": CATS, "prev": PREV, "rows": n, "sessions": sessions_n}, fh, indent=1)
+    print(f"{n:,} rows, {sessions_n:,} sessions -> {out}")
 
 
 if __name__ == "__main__":

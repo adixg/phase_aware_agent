@@ -8,6 +8,7 @@ import pytest
 
 from analysis.dag import tool_eval
 from analysis.dag.tool_eval import scores
+from analysis.dag.dataset import CATS
 from prediction.predictor.tool_baseline import CLASSES, CODE, END, ToolForecaster
 
 
@@ -79,7 +80,7 @@ def test_scores_of_a_perfect_and_a_uniform_forecast():
 
 def write_rows(path, rows):
     cols = ["session", "day", "turn", "step", "event", "harness", "model", "prev1_cat", "prev2_cat", "prev3_cat",
-            "prev1_errors", "prev1_width", "prev1_result_tokens", "prev1_finish"]
+            "prev1_errors", "prev1_width", "prev1_result_tokens", "prev1_finish"] + [f"cat_{c}" for c in CATS]
     with gzip.open(path, "wt", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=cols)
         w.writeheader()
@@ -90,7 +91,8 @@ def write_rows(path, rows):
 def test_the_label_of_an_a_row_comes_from_the_r_row_of_the_same_request(tmp_path):
     base = {"session": "s", "day": "2026-08-23", "turn": 0, "harness": "h", "model": "m"}
     rows = [dict(base, step=0, event="A"), dict(base, step=0, event="R", prev1_cat="*Search", prev1_width=1),
-            dict(base, step=1, event="A", prev1_cat="*Search", prev1_width=1, prev1_errors=0, prev1_result_tokens=5, prev1_finish="tool_calls"),
+            dict(base, step=1, event="A", prev1_cat="*Search", prev1_width=1, prev1_errors=0, prev1_result_tokens=5, prev1_finish="tool_calls",
+                 **{"cat_*Search": 2, "cat_Read": 1}),
             dict(base, step=1, event="R", prev1_cat="__none__", prev1_width=0),
             dict(base, step=2, event="A", prev1_cat="__none__"), dict(base, step=2, event="R", prev1_cat="Strange", prev1_width=1),
             dict(base, step=3, event="A", day="2026-09-01"), dict(base, step=3, event="R", day="2026-09-01", prev1_cat="Read")]
@@ -99,3 +101,16 @@ def test_the_label_of_an_a_row_comes_from_the_r_row_of_the_same_request(tmp_path
     got = tool_eval.load(str(path), ["2026-08-23"])
     assert [(r["step"], r["next_cat"]) for r in got] == [(0, "*Search"), (1, END), (2, "Other")]    # the Sep 1 request is filtered out
     assert got[0]["prev1_cat"] is None and got[1]["prev1_cat"] == "*Search" and got[1]["prev1_result_tokens"] == 5.0
+    assert got[0]["dom"] is None and got[1]["dom"] == "*Search"        # the turn's most used tool so far, None before any
+
+
+def test_the_dominant_tool_level_separates_turns_by_what_they_have_used_most():
+    rows = []
+    for i in range(80):
+        r = row(1, "Read", "Edit" if i % 2 else "Write")
+        r["dom"] = "Edit" if i % 2 else "Write"
+        rows.append(r)
+    model = ToolForecaster(rows, ("cat", "dom"), 1e-6)
+    assert near(model.proba(dict(row(prev1="Read"), dom="Edit"))[CODE["Edit"]], 1.0)
+    assert near(model.proba(dict(row(prev1="Read"), dom="Write"))[CODE["Write"]], 1.0)
+    assert near(model.proba(dict(row(prev1="Read"), dom=None))[CODE["Edit"]], 0.5)       # no tool yet: the parent
