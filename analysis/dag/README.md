@@ -125,6 +125,25 @@ python -m pytest -q                                  # needs numpy and pytest
 `--tune` logs every setting it tries and writes `frozen.json`; `--validate` refuses to run twice in a checkout. Results
 land in `data/freeinference/tools16w/`, `duration16w/` and `session16w/`.
 
+## 6. Predicted against actual, row by row
+
+```sh
+python -m analysis.dag.predictions_vs_actual                       # the tuning week, Aug 9-15
+python -m analysis.dag.predictions_vs_actual --week validation     # the validation week, Aug 16-22
+```
+
+This writes `next_tool.csv`, `tool_duration.csv` and `time_left.csv` to `data/freeinference/predictions/<week>/`, with a
+`README.md` there that defines every column. Each row is one scored decision: the model's forecast and its baseline's, beside
+what actually happened (probabilities over the 17 tools; mean and 10th, 50th, 90th percentiles of the time, with the
+CRPS of that one forecast). Sort on `model_brier` or `model_crps_s` to find the worst misses.
+
+* It needs each predictor's `frozen.json`, which `--tune` writes, so run the three `--tune` commands from section 5 first
+  (a few minutes). The models are refitted with those settings: on the fit weeks for the tuning week, and on the fit and
+  tuning weeks for the validation week, as the validation did.
+* Only the gated decision steps are written; `--all-steps` writes every request and turn.
+* On the validation week the script also checks that its per-step averages equal `validation_done.json`, when that file exists.
+* Each of our models has already been scored once on the validation week. Use those rows to look, not to tune.
+
 ## Notes
 
 * The tool-duration round time is the round's, not one tool's: every tool in a round shares one time in this trace.
