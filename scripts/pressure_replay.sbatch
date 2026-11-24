@@ -10,6 +10,8 @@
 #   WORKLOAD=workloads/pressure_2026-08-16.json MAX_NUM_SEQS=8 sbatch ...
 #   MODE=native VLLM_ARGS='--kv-transfer-config {...}' sbatch ...  # vLLM's own CPU offloading (set its flags)
 #   CONDA_ENV=$HOME/scratch/conda-envs/paa-lmcache MODE=lmcache sbatch ...   # an env with lmcache installed
+#   VENV=$HOME/scratch/venvs/paa-lmcache MODE=lmcache sbatch ...   # or a venv layered on the conda env
+#                                                          # (python -m venv --system-site-packages)
 #   sbatch --time=00:20:00 scripts/pressure_replay.sbatch --limit-sessions 4   # smoke test (args go to replay)
 #
 # The 125k-token pool is the scaled-down equivalent (workload tokens / 16) of the simulator's 2M-token
@@ -42,6 +44,9 @@ mkdir -p "$OUT" logs results/traces
 command -v conda >/dev/null || module load anaconda3
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate "${CONDA_ENV:-$HOME/scratch/conda-envs/paa}"
+if [[ -n "${VENV:-}" ]]; then    # packages installed there (lmcache) take precedence over the conda env's
+    source "$VENV/bin/activate"
+fi
 export HF_HOME="${HF_HOME:-$HOME/scratch/hf_cache}" HF_HUB_OFFLINE=1
 
 DEFAULT_MODEL=$(ls -d "$HF_HOME"/hub/models--Qwen--Qwen2.5-7B-Instruct/snapshots/*/ 2>/dev/null | head -1 || true)
