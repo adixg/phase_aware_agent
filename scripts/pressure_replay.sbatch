@@ -25,7 +25,8 @@
 #SBATCH -C "L40S"                  # one GPU type: the timings are compared with the simulator
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G                  # room for the LMCache CPU tier
-#SBATCH --time=01:00:00            # ~5 min startup + ~5 min calibration + ~20-30 min replay
+#SBATCH --time=04:00:00            # ~10 min startup + calibration; replay ~15 min roomy, far longer if thrashing
+#SBATCH --signal=B:TERM@300        # 5 min before the limit: stop and save what has been replayed
 #SBATCH --output=logs/%x-%j.out
 
 set -euo pipefail
@@ -84,7 +85,14 @@ export PAA_VLLM_CMD="${SERVE[*]}" PAA_KV_MODE="$MODE" PAA_POOL_TOKENS="$POOL_TOK
 echo "${SERVE[*]}"
 "${SERVE[@]}" > "$VLOG" 2>&1 &
 VLLM_PID=$!
-trap 'kill $VLLM_PID 2>/dev/null || true' EXIT
+save() {   # copy whatever exists, also when the job is cut short (requests.jsonl is written as it goes)
+    [[ -n "${SAVED:-}" ]] && return; SAVED=1
+    cp "$VLOG" "$OUT/vllm.log" 2>/dev/null || true
+    cp -r "$OUT" "results/traces/$NAME"
+    echo "results: results/traces/$NAME"
+}
+trap 'save; kill $VLLM_PID 2>/dev/null || true' EXIT
+trap 'echo "time limit near: stopping, saving a partial run"; kill $CHILD 2>/dev/null; STATUS=143; exit 143' TERM
 
 for _ in $(seq 120); do
     curl -sf "localhost:$PORT/health" >/dev/null && break
@@ -96,10 +104,9 @@ sleep 1; grep -q '"GET /health' "$VLOG" || { echo "port $PORT is answered by ano
 echo "vLLM up on port $PORT"
 
 URL="http://localhost:$PORT/v1"
-python scripts/pressure_replay.py calibrate --base-url "$URL" --pool-tokens "$POOL_TOKENS" --out "$OUT" || STATUS=$?
-python scripts/pressure_replay.py replay --base-url "$URL" --workload "$WORKLOAD" --out "$OUT" "$@" || STATUS=$?
-
-cp "$VLOG" "$OUT/vllm.log"
-cp -r "$OUT" "results/traces/$NAME"
-echo "results: results/traces/$NAME"
+# in the background + wait, so the TERM trap runs at once instead of after the step finishes
+python scripts/pressure_replay.py calibrate --base-url "$URL" --pool-tokens "$POOL_TOKENS" --out "$OUT" & CHILD=$!
+wait $CHILD || STATUS=$?
+python scripts/pressure_replay.py replay --base-url "$URL" --workload "$WORKLOAD" --out "$OUT" "$@" & CHILD=$!
+wait $CHILD || STATUS=$?
 exit "${STATUS:-0}"

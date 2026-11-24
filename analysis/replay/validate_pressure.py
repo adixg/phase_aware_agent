@@ -4,7 +4,9 @@ simulator predicts for other schedulers on that same, now checked, workload.
 The simulator gets exactly what was replayed: the workload's sessions (prompt, shared prefix, output,
 gaps), vLLM's KV pool and max-num-seqs as slots, the calibrated prefill cost, the decode speed measured
 during the replay, and for a CPU-tier run the measured post-eviction cost as its reload speed. vLLM
-schedules first come first served, so the comparison is with the simulator's FCFS + LRU.
+schedules first come first served, so the comparison is with the simulator's FCFS + LRU. Prompts are
+computed one at a time on the GPU (shared_prefill), as in vLLM; --parallel-prefill shows the old model
+for comparison.
 
     python -m analysis.replay.validate_pressure results/traces/pressure-<jobid>_<mode>_pool<N> [more runs]
 """
@@ -40,8 +42,9 @@ def sessions_of(workload: dict, speedup: float):
 
 def profile_of(run: Path, reqs: list[dict], mode: str) -> Profile:
     cal = json.load(open(run / "calibration.json"))
-    decode = st.median((r["total_s"] - r["ttft_s"]) * 1000 / max(1, r["completion"] - 1)
-                       for r in reqs if r.get("total_s") and r["completion"] > 1)
+    # all decode time over all decoded tokens: stalls behind other prompts are long-tailed, so a median misses them
+    dec = [r for r in reqs if r.get("total_s") and r["completion"] > 1]
+    decode = sum(r["total_s"] - r["ttft_s"] for r in dec) * 1000 / sum(r["completion"] - 1 for r in dec)
     reload_ms = cal["after_eviction_ms_per_token"] if mode in ("lmcache", "native") else None
     return Profile(decode_ms=decode, prefill_ms=cal["prefill_ms_per_token"], overhead_ms=max(0.0, cal["overhead_ms"]),
                    reload_ms=reload_ms)
@@ -56,7 +59,7 @@ def session_times(sim: Simulator) -> dict[str, float]:
     return out
 
 
-def check(run: Path) -> None:
+def check(run: Path, shared_prefill: bool = True) -> None:
     man = json.load(open(run / "manifest.json"))
     reqs = [json.loads(l) for l in open(run / "requests.jsonl")]
     errors = sum(r["error"] is not None for r in reqs)
@@ -77,13 +80,21 @@ def check(run: Path) -> None:
         a = real.setdefault(r["sid"], [math.inf, 0.0])
         a[0], a[1] = min(a[0], r["ready_s"]), max(a[1], r["end_s"])
     real = {k: e - s for k, (s, e) in real.items()}
+    if not man.get("complete", True):     # cut short (time limit): only sessions that got every request done
+        n = {s["sid"]: len(s["requests"]) for s in workload["sessions"]}
+        got = {}
+        for r in reqs:
+            got[r["sid"]] = got.get(r["sid"], 0) + (r["error"] is None)
+        real = {k: v for k, v in real.items() if got.get(k) == n[k]}
+        print(f"\n!! {run.name} was cut short: comparing the {len(real)} of {len(n)} sessions it finished, "
+              "which are biased towards short ones")
     real_hit = sum(r.get("cached_tokens") or 0 for r in reqs) / sum(r["prompt"] for r in reqs)
 
     raw = sessions_of(workload, speedup)
     sessions = build_sessions(raw, profile, unit="session")
     cheap = Cheap(sessions, profile)
     base = dict(slots=slots, kv_tokens=pool, profile=profile, deadline_mode="proportional", slack=100.0,
-                cpu_tokens=cpu_tokens if profile.reload_ms is not None else math.inf)
+                cpu_tokens=cpu_tokens if profile.reload_ms is not None else math.inf, shared_prefill=shared_prefill)
     sim = Simulator(sessions, Config(policy="fcfs", **base), cheap).run()
     simulated = session_times(sim)
 
@@ -91,13 +102,14 @@ def check(run: Path) -> None:
     a, b = [real[k] for k in keys], [simulated[k] for k in keys]
     corr = st.correlation(a, b) if len(keys) > 2 else float("nan")
     p95 = lambda v: sorted(v)[int(0.95 * (len(v) - 1))]
-    print(f"\n== {run.name}: mode {mode}, pool {pool:,.0f} tokens, {slots} slots, {len(reqs)} requests ({errors} errors)")
+    print(f"\n== {run.name} ({'shared' if shared_prefill else 'parallel'} prefill): mode {mode}, pool {pool:,.0f} tokens, {slots} slots, {len(reqs)} requests ({errors} errors)")
     print(f"   profile: prefill {profile.prefill_ms:.4f} ms/token, decode {profile.decode_ms:.1f} ms/token under load, "
           f"overhead {profile.overhead_ms:.0f} ms" + (f", reload {profile.reload_ms:.4f} ms/token" if profile.reload_ms else ""))
     print(f"   session time  real: mean {st.mean(a):6.1f} s, p95 {p95(a):6.1f} s   simulated FCFS: mean {st.mean(b):6.1f} s, "
           f"p95 {p95(b):6.1f} s   (mean off by {100 * (st.mean(b) / st.mean(a) - 1):+.1f}%, per-session r = {corr:.2f})")
-    print(f"   prompt tokens found in GPU cache  real {100 * real_hit:.1f}%   simulated {100 * sim.tokens_hit / sim.tokens_prompt:.1f}%"
-          "   (vLLM's count may leave out CPU-tier hits)")
+    gpu, cpu = 100 * sim.tokens_hit / sim.tokens_prompt, 100 * sim.tokens_cpu_hit / sim.tokens_prompt
+    print(f"   prompt tokens cached  real {100 * real_hit:.1f}% (GPU + CPU tier)   simulated {gpu + cpu:.1f}% "
+          f"(GPU {gpu:.1f}% + CPU tier {cpu:.1f}%)   simulated prefill queueing {sim.prefill_wait:.0f} s in all")
 
     print("   simulator on this workload, % of sessions on time (deadline = scale x time alone):")
     print("   " + "%-36s" % "" + "".join("%9s" % f"{s}x" for s in (1.1, 1.2, 1.5)))
@@ -115,5 +127,6 @@ def check(run: Path) -> None:
 
 
 if __name__ == "__main__":
-    for p in sys.argv[1:]:
-        check(Path(p))
+    runs = [a for a in sys.argv[1:] if not a.startswith("--")]
+    for p in runs:
+        check(Path(p), shared_prefill="--parallel-prefill" not in sys.argv)

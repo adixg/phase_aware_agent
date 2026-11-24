@@ -270,6 +270,11 @@ class Config:
     # P from the tool category's training-week gaps; with no other room, the latest-arrived pinned
     # session is evicted first.
     pin: str = "none"                # none | ttl
+    # One GPU computes prompts one at a time: vLLM's prefill uses the whole GPU, so a request's uncached
+    # prompt waits for the prefills ahead of it instead of every slot prefilling at full speed in parallel.
+    # Decode stays per slot; use a decode speed measured under load, which already includes the stalls
+    # other requests' prefills cause.
+    shared_prefill: bool = False
 
 
 @dataclass
@@ -328,6 +333,9 @@ class Simulator:
         self.cpu_used = 0.0
         self.link_free = 0.0                  # when the shared GPU-CPU link is next idle
         self.link_wait = 0.0
+        self.prefill_free = 0.0               # when the GPU is next free to compute a prompt
+        self.prefill_wait = 0.0
+        self.tokens_cpu_hit = 0.0
         self.recent_waits: deque = deque(maxlen=100)   # Continuum's sliding window of queueing delay
         self.pinned_evicted = 0
         finite_cpu = cfg.cpu_tokens < math.inf or cfg.shared_link
@@ -518,6 +526,11 @@ class Simulator:
                 self.link_free = start + cpu_hit * cfg.profile.reload_ms / 1000
                 self.link_wait += start - now
                 service += start - now
+            if cfg.shared_prefill and uncached > 0:      # the prompt waits for the GPU to be free
+                start = max(now, self.prefill_free)
+                self.prefill_free = start + (cfg.profile.overhead_ms + cfg.profile.prefill_ms * uncached) / 1000
+                self.prefill_wait += start - now
+                service += start - now
             if cfg.pin == "ttl":
                 self.recent_waits.append(now - item[3])
             if st.loaded_at > now and usable > 0:        # its prefetch is still copying in
@@ -527,6 +540,7 @@ class Simulator:
             before_decode = service - cfg.profile.decode_ms * completion / 1000   # only read when preempting
             self.tokens_prompt += prompt
             self.tokens_hit += usable
+            self.tokens_cpu_hit += cpu_hit
             st.resident = usable + need
             st.attained += service
             self.busy.append((now, service))
@@ -717,6 +731,8 @@ def summarize(sim: Simulator, horizon: float | None = None) -> dict:
         "prefetches": sim.prefetches,
         "transfer_wait_s": sim.transfer_wait,
         "link_wait_s": sim.link_wait,
+        "prefill_wait_s": sim.prefill_wait,
+        "cpu_hit_rate": sim.tokens_cpu_hit / sim.tokens_prompt if sim.tokens_prompt else None,
         "pinned_evicted": sim.pinned_evicted,
     }
     if horizon is not None:

@@ -418,3 +418,22 @@ def test_fewest_tokens_first():
     a, b = 1000 * 0.001 + 1.0, 100 * 0.001 + 1.0
     assert sorted(t.latency for t in fcfs.turns) == pytest.approx(sorted([1.0, 1 + a - 0.2, 1 + a + b - 0.4]))
     assert sorted(t.latency for t in fewest.turns) == pytest.approx(sorted([1.0, 1 + b - 0.4, 1 + b + a - 0.2]))
+
+
+def test_shared_prefill_queues_prompts_on_one_gpu():
+    """Two cold 1000-token prompts arriving together, two slots: with shared prefill the second waits
+    for the first's prompt (1 s), decode still overlaps; off, both run in parallel as before."""
+    from analysis.replay.sim import Config, Profile, Simulator, build_sessions
+    prof = Profile(decode_ms=10.0, prefill_ms=1.0)
+    raw = [{"sid": s, "start": 0.0, "requests": [{"prompt": 1000, "lcp": 0, "completion": 10, "append": False,
+                                                    "user": True, "cat": "__none__", "gap": None}]} for s in "ab"]
+    sessions = build_sessions(raw, prof, unit="session")
+    ends = {}
+    for shared in (False, True):
+        cfg = Config(slots=2, kv_tokens=1e6, profile=prof, policy="fcfs", deadline_mode="proportional",
+                     slack=100.0, shared_prefill=shared)
+        sim = Simulator(sessions, cfg).run()
+        ends[shared] = sorted(t.latency for t in sim.turns)
+        assert sim.prefill_wait == (1.0 if shared else 0.0)
+    assert ends[False] == pytest.approx([1.1, 1.1])
+    assert ends[True] == pytest.approx([1.1, 2.1])

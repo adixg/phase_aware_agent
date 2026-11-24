@@ -180,6 +180,12 @@ def replay(args) -> None:
     model = served_model(args.base_url)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+    manifest = {"model": model, "workload": str(args.workload), "workload_meta": work["meta"], "speedup": args.speedup,
+                "limit_sessions": args.limit_sessions,
+                "mode": os.environ.get("PAA_KV_MODE"), "pool_tokens": os.environ.get("PAA_POOL_TOKENS"),
+                "cpu_gb": os.environ.get("PAA_CPU_GB"), "vllm_cmd": os.environ.get("PAA_VLLM_CMD"),
+                "max_num_seqs": os.environ.get("PAA_MAX_NUM_SEQS"), "complete": False}
+    json.dump(manifest, open(out / "manifest.json", "w"), indent=1)   # up front, so a run cut short still has one
     log = open(out / "requests.jsonl", "w")
     lock = threading.Lock()
     t0 = time.perf_counter() + 2.0
@@ -218,11 +224,7 @@ def replay(args) -> None:
     if poller:
         poller.stop()
     log.close()
-    manifest = {"model": model, "workload": str(args.workload), "workload_meta": work["meta"], "speedup": args.speedup,
-                "limit_sessions": args.limit_sessions,
-                "mode": os.environ.get("PAA_KV_MODE"), "pool_tokens": os.environ.get("PAA_POOL_TOKENS"),
-                "cpu_gb": os.environ.get("PAA_CPU_GB"), "vllm_cmd": os.environ.get("PAA_VLLM_CMD"),
-                "max_num_seqs": os.environ.get("PAA_MAX_NUM_SEQS")}
+    manifest["complete"] = True
     json.dump(manifest, open(out / "manifest.json", "w"), indent=1)
     rows = [json.loads(l) for l in open(out / "requests.jsonl")]
     errs = sum(r["error"] is not None for r in rows)
