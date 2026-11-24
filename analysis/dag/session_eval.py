@@ -36,9 +36,10 @@ TARGETS = {"fut_calls": 0, "fut_turns": 1}                           # which mar
 
 assert len(GRID) <= G.TUNING_BUDGET
 
-INT = {"turn", "turn_idx", "cur_calls", "fut_turns", "fut_calls"}
+INT = {"turn", "turn_idx", "cur_calls", "fut_turns", "fut_calls", "rem_calls"}
 FLOAT = {"first_prompt", "idle_before_s", "elapsed_s", "prior_mean_calls", "prior_last_calls", "prior_last_wall_s",
-         "prior_mean_work_s", "prior_mean_idle_s", "user_sessions", "user_mean_turns", "user_mean_calls", "fut_work_s"}
+         "prior_mean_work_s", "prior_mean_idle_s", "user_sessions", "user_mean_turns", "user_mean_calls", "fut_work_s",
+         "user_mean_path_s", "cur_path_s", "fut_path_s", "rem_path_s"}       # the last four exist in rows built after the path labels
 STR = {"session", "day", "harness", "model"}
 
 
@@ -50,8 +51,8 @@ def load(path: str, days) -> list[dict]:
                 continue
             out = {k: r[k] for k in STR}
             out["model"] = r["model"] or None
-            out.update({k: int(r[k]) for k in INT})
-            out.update({k: (float(r[k]) if r[k] != "" else None) for k in FLOAT})
+            out.update({k: int(r[k]) for k in INT if k in r})
+            out.update({k: (float(r[k]) if r[k] != "" else None) for k in FLOAT if k in r})
             rows.append(out)
     return rows
 

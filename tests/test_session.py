@@ -38,17 +38,17 @@ def test_labels_count_what_comes_after_each_turn():
 
 def test_features_hold_the_earlier_turns_and_this_turns_arrival():
     s = session()
-    f = features(session_view(s, 1), {"n": 0, "turns": None, "calls": None})
+    f = features(session_view(s, 1), {"n": 0, "turns": None, "calls": None, "path": None})
     assert f["turn_idx"] == 1 and f["prior_mean_calls"] == 3 and f["prior_last_calls"] == 3
     assert f["first_prompt"] == 1100 and f["idle_before_s"] == 5.0
     assert f["prior_last_wall_s"] == pytest.approx(6.0)
-    first = features(session_view(s, 0), {"n": 0, "turns": None, "calls": None})
+    first = features(session_view(s, 0), {"n": 0, "turns": None, "calls": None, "path": None})
     assert first["prior_mean_calls"] is None and first["idle_before_s"] is None and first["elapsed_s"] == 0
 
 
 def test_the_future_cannot_reach_a_feature():
     s = session(sizes=(3, 4, 2))
-    h = {"n": 0, "turns": None, "calls": None}
+    h = {"n": 0, "turns": None, "calls": None, "path": None}
     for u in range(3):
         assert features(session_view(s, u), h) == features(session_view(scramble(s, u), u), h)
     assert audit([s, session("b", (2, 2))], SessionHistory([s]), 10) == 0
@@ -56,7 +56,7 @@ def test_the_future_cannot_reach_a_feature():
 
 def test_a_feature_that_read_the_future_would_be_caught():
     s = session(sizes=(3, 4, 2))
-    h = {"n": 0, "turns": None, "calls": None}
+    h = {"n": 0, "turns": None, "calls": None, "path": None}
     leaky = lambda turns, u: len(turns[u]["rounds"])       # this turn's own size: known only at its end
     assert leaky(s, 1) != leaky(scramble(s, 1), 1)
 
@@ -113,3 +113,24 @@ def test_crps_is_zero_for_a_certain_outcome_and_rises_with_the_miss():
     rows = [{"turn_idx": 0, "harness": "x", "model": "m", "fut_calls": 7, "fut_turns": 1} for _ in range(20)]
     calls, _, _ = SessionForecaster(rows, (), 20).marginals(rows[0])
     assert near(calls.crps(7), 0) and calls.crps(10) > calls.crps(8) > 0
+
+
+def test_the_path_labels_count_the_systems_time_and_leave_the_users_pause_out():
+    s = session()                              # turns of 3, 1 and 2 requests, 1000 ms rounds
+    got = [labels(s, u) for u in range(3)]
+    assert got[0]["cur_path_s"] == pytest.approx(sum(r["_ideal"] for r in s[0]["rounds"]) + 3 * 1.0)
+    assert got[0]["rem_path_s"] == pytest.approx(got[0]["cur_path_s"] + got[0]["fut_path_s"])
+    assert got[0]["fut_path_s"] == pytest.approx(got[1]["cur_path_s"] + got[2]["cur_path_s"])
+    assert got[2]["fut_path_s"] == 0 and got[2]["rem_path_s"] == got[2]["cur_path_s"]
+    assert [g["rem_calls"] for g in got] == [6, 3, 2]
+    assert got[0]["rem_path_s"] > got[1]["rem_path_s"] > got[2]["rem_path_s"]
+
+
+def test_the_users_mean_session_path_comes_from_sessions_that_ended_before():
+    a, b = session("a", (3, 1), t0=0), session("b", (2,), t0=10**9)
+    hist = SessionHistory([a, b])
+    from analysis.dag.session import turn_path_s
+    want = sum(turn_path_s(t) for t in a)
+    got = hist.before("u1", a[-1]["end"] + 1)
+    assert got["n"] == 1 and got["path"] == pytest.approx(want)
+    assert hist.before("u1", a[-1]["end"])["path"] is None

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from .online_baseline import Hierarchy, bucket, mean_of, quantile_edges, step_bucket
 
-NUMERIC_LEVELS = {"hist": "user_mean_turns", "histcalls": "user_mean_calls", "last": "prior_last_calls",
+NUMERIC_LEVELS = {"hist": "user_mean_turns", "histcalls": "user_mean_calls", "histpath": "user_mean_path_s", "last": "prior_last_calls",
                   "prior": "prior_mean_calls", "idle": "idle_before_s", "prompt": "first_prompt",
                   "wall": "prior_last_wall_s", "elapsed": "elapsed_s"}
 CATEGORICAL_LEVELS = {"harness": "harness", "model": "model"}
@@ -51,3 +51,31 @@ class SessionForecaster:
         """Expected requests and expected turns to come."""
         calls, turns, _ = self.marginals(row)
         return mean_of(calls), mean_of(turns)
+
+
+class SessionTimeForecaster(SessionForecaster):
+    """The time left in the session at a user turn's start, the current turn included (analysis/dag/session.py:
+    `rem_path_s`, the system's own time in whole seconds: modelled work plus the round times between requests,
+    not the user's pauses) and the requests left (`rem_calls`). The same chains of levels as SessionForecaster;
+    `histpath`, the user's mean time per earlier session, is the new level."""
+
+    TARGETS = ("rem_path_s", "rem_calls")
+
+    def __init__(self, rows: list[dict], levels: tuple[str, ...] = (), strength: float = 20):
+        assert all(lv in LEVELS for lv in levels), levels
+        self.levels, self.strength = tuple(levels), strength
+        self.edges = {lv: quantile_edges([r[col] for r in rows]) for lv, col in NUMERIC_LEVELS.items() if lv in levels}
+        self.h = {t: Hierarchy([(self.inputs(r), (self.value(r, t),)) for r in rows], strength=strength) for t in self.TARGETS}
+
+    @staticmethod
+    def value(row: dict, target: str) -> int:
+        return int(round(row[target]))
+
+    def marginal(self, row: dict, target: str):
+        """The distribution of one target, from the deepest populated group."""
+        _, marginals, _ = self.h[target].distribution(self.inputs(row))
+        return marginals[0]
+
+    def predict(self, row: dict) -> tuple[float, float]:
+        """Expected seconds and expected requests left."""
+        return tuple(mean_of(self.marginal(row, t)) for t in self.TARGETS)

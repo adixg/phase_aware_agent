@@ -14,6 +14,11 @@ Labels, counted from the start of turn u:
   fut_turns   user turns after this one
   fut_calls   requests in those turns
   fut_work_s  modelled GPU work of those requests (the replay's cost model, as in analysis/dag/dataset.py)
+  cur_path_s  the system's own time in this turn: modelled work plus the round times between its requests
+  fut_path_s  the same for the turns after this one (user pauses are in neither: they are the user's time)
+  rem_path_s  cur_path_s + fut_path_s: the time left in the session from this turn's start (the gated target
+              of the time-left predictor, analysis/dag/session_eval_16w.py)
+  rem_calls   cur_calls + fut_calls
 
     python -m analysis.dag.session data/freeinference/dag
     python -m analysis.dag.session data/freeinference/dag --audit 3000
@@ -37,9 +42,14 @@ from analysis.dag.dataset import NA, day_files, load_sessions, mean, turn_summar
 META = ["session", "user", "day", "turn"]
 FEATURES = ["harness", "model", "turn_idx", "first_prompt", "idle_before_s", "elapsed_s", "prior_mean_calls",
             "prior_last_calls", "prior_last_wall_s", "prior_mean_work_s", "prior_mean_idle_s", "user_sessions",
-            "user_mean_turns", "user_mean_calls"]
-LABELS = ["cur_calls", "fut_turns", "fut_calls", "fut_work_s"]
+            "user_mean_turns", "user_mean_calls", "user_mean_path_s"]
+LABELS = ["cur_calls", "fut_turns", "fut_calls", "fut_work_s", "cur_path_s", "fut_path_s", "rem_path_s", "rem_calls"]
 COLUMNS = META + FEATURES + LABELS
+
+
+def turn_path_s(t: dict) -> float:
+    """The system's own time in a turn: modelled work plus the round times between its requests (not the user's pause)."""
+    return sum(r["_ideal"] + (r["round_ms"] or 0) / 1000 for r in t["rounds"])
 
 
 def session_view(turns: list[dict], u: int) -> dict:
@@ -66,16 +76,17 @@ class SessionHistory:
 
     def add(self, sessions: list[list[dict]]) -> None:
         for turns in sessions:
-            self.rows[turns[0]["user"]].append((turns[-1]["end"], len(turns), sum(len(t["rounds"]) for t in turns)))
+            self.rows[turns[0]["user"]].append((turns[-1]["end"], len(turns), sum(len(t["rounds"]) for t in turns),
+                                                sum(turn_path_s(t) for t in turns)))
 
     def finish(self) -> "SessionHistory":
         for user, rows in self.rows.items():
             rows.sort()
             self.ends[user] = [r[0] for r in rows]
-            acc, a, b = [(0, 0)], 0, 0
-            for _, n, c in rows:
-                a, b = a + n, b + c
-                acc.append((a, b))
+            acc, a, b, d = [(0, 0, 0.0)], 0, 0, 0.0
+            for _, n, c, p in rows:
+                a, b, d = a + n, b + c, d + p
+                acc.append((a, b, d))
             self.cum[user] = acc
         self.rows = defaultdict(list)
         return self
@@ -83,9 +94,9 @@ class SessionHistory:
     def before(self, user: str, T: int) -> dict:
         n = bisect.bisect_left(self.ends.get(user, []), T)       # sessions that ended strictly before T
         if n == 0:
-            return {"n": 0, "turns": NA, "calls": NA}
-        a, b = self.cum[user][n]
-        return {"n": n, "turns": a / n, "calls": b / n}
+            return {"n": 0, "turns": NA, "calls": NA, "path": NA}
+        a, b, d = self.cum[user][n]
+        return {"n": n, "turns": a / n, "calls": b / n, "path": d / n}
 
 
 def features(v: dict, h: dict) -> dict:
@@ -98,13 +109,16 @@ def features(v: dict, h: dict) -> dict:
             "prior_mean_calls": mean(calls), "prior_last_calls": calls[-1] if calls else NA,
             "prior_last_wall_s": ear[-1]["wall"] if ear else NA, "prior_mean_work_s": mean([e["work"] for e in ear]),
             "prior_mean_idle_s": mean([x / 1000 for x in idle]), "user_sessions": h["n"],
-            "user_mean_turns": h["turns"], "user_mean_calls": h["calls"]}
+            "user_mean_turns": h["turns"], "user_mean_calls": h["calls"], "user_mean_path_s": h["path"]}
 
 
 def labels(turns: list[dict], u: int) -> dict:
     later = turns[u + 1:]
-    return {"cur_calls": len(turns[u]["rounds"]), "fut_turns": len(later),
-            "fut_calls": sum(len(t["rounds"]) for t in later), "fut_work_s": sum(turn_summary(t)["work"] for t in later)}
+    cur_calls, fut_calls = len(turns[u]["rounds"]), sum(len(t["rounds"]) for t in later)
+    cur_path, fut_path = turn_path_s(turns[u]), sum(turn_path_s(t) for t in later)
+    return {"cur_calls": cur_calls, "fut_turns": len(later), "fut_calls": fut_calls,
+            "fut_work_s": sum(turn_summary(t)["work"] for t in later), "cur_path_s": cur_path, "fut_path_s": fut_path,
+            "rem_path_s": cur_path + fut_path, "rem_calls": cur_calls + fut_calls}
 
 
 def rows_of(turns: list[dict], hist: SessionHistory):
