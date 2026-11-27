@@ -1,0 +1,33 @@
+---------------------------------------
+Begin Slurm Prolog: Nov-24-2026 17:42:48
+Job ID:    7290466
+User ID:   aghosh367
+Account:   coc
+Job name:  paa-pressure
+Partition: ice-gpu
+QOS:       coc-ice
+---------------------------------------
+node atl1-1-03-004-27-0.pace.gatech.edu  gpu NVIDIA L40S  mode recompute  pool 125000 tokens (7813 blocks)
+vllm 0.31.0
+vllm serve /home/hice1/aghosh367/scratch/hf_cache/hub/models--Qwen--Qwen2.5-7B-Instruct/snapshots/a09a35458c702b33eeacc393d103063234e8bc28/ --served-model-name Qwen/Qwen2.5-7B-Instruct --port 50677 --max-num-seqs 8 --max-model-len 32768 --num-gpu-blocks-override 7813 --gpu-memory-utilization 0.90 --enable-prompt-tokens-details --enable-prefix-caching --generation-config vllm
+vLLM up on port 50677
+{"tokens": 2048, "cold_ttft_s": 0.15382673009298742, "gpu_hit_ttft_s": 0.02902704500593245, "after_eviction_ttft_s": 0.15118469996377826, "cached_after_eviction": 0}
+{"tokens": 4096, "cold_ttft_s": 0.313631942961365, "gpu_hit_ttft_s": 0.03286983212456107, "after_eviction_ttft_s": 0.319281660951674, "cached_after_eviction": 0}
+{"tokens": 8192, "cold_ttft_s": 0.6725317339878529, "gpu_hit_ttft_s": 0.03892732411623001, "after_eviction_ttft_s": 0.6780948701780289, "cached_after_eviction": 0}
+{"tokens": 16384, "cold_ttft_s": 1.5072678469587117, "gpu_hit_ttft_s": 0.0517285221721977, "after_eviction_ttft_s": 1.5093032498843968, "cached_after_eviction": 0}
+{"tokens": 28672, "cold_ttft_s": 3.0564426691271365, "gpu_hit_ttft_s": 0.07611349783837795, "after_eviction_ttft_s": 3.038761527976021, "cached_after_eviction": 0}
+{"model": "Qwen/Qwen2.5-7B-Instruct", "pool_tokens": 125000, "prefill_ms_per_token": 0.1092490006738715, "overhead_ms": -156.9631449789046, "after_eviction_ms_per_token": 0.10855939734226998, "decode_ms_per_token_alone": 20.115128089992762}
+3936 requests, 0 errors, wall 3336 s
+results: results/traces/pressure-7290466_recompute_pool125000
+---------------------------------------
+Begin Slurm Epilog: Nov-24-2026 18:49:06
+Job ID:        7290466
+User ID:       aghosh367
+Account:       coc
+Job name:      paa-pressure
+Resources:     cpu=8,gres/gpu:l40s=1,mem=64G,node=1
+Rsrc Used:     cput=08:50:32,vmem=0,walltime=01:06:19,mem=11612452K,energy_used=0
+Partition:     ice-gpu
+QOS:           coc-ice
+Nodes:         atl1-1-03-004-27-0
+---------------------------------------

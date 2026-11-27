@@ -1,0 +1,209 @@
+---------------------------------------
+Begin Slurm Prolog: Nov-27-2026 12:25:15
+Job ID:    7385784
+User ID:   aghosh367
+Account:   coc
+Job name:  paa-turnfc
+Partition: ice-cpu
+QOS:       coc-ice
+---------------------------------------
+track 1 code: 52ce3bd Create script to write pred vs actual files
+building her rows (once)
+2026-09-02 skipped: held-out split (--include-heldout to build it)
+2026-09-03 skipped: held-out split (--include-heldout to build it)
+2026-09-04 skipped: held-out split (--include-heldout to build it)
+2026-09-05 skipped: held-out split (--include-heldout to build it)
+2026-05-17 {"sessions": 25, "requests_top": 1375, "turns": 150}
+2026-05-18 {"sessions": 14, "requests_top": 1617, "turns": 105}
+2026-05-19 {"sessions": 8, "requests_top": 4719, "turns": 184, "subagent_calls": 1, "subagent_requests": 2}
+2026-05-20 {"sessions": 17, "requests_top": 366, "turns": 68, "subagent_calls": 2, "subagent_requests": 17}
+2026-05-21 {"sessions": 15, "requests_top": 731, "turns": 103, "subagent_calls": 5, "subagent_requests": 35}
+2026-05-22 {"sessions": 16, "requests_top": 990, "turns": 89, "subagent_calls": 8, "subagent_requests": 126}
+2026-05-23 {"sessions": 11, "requests_top": 750, "turns": 67, "subagent_calls": 3, "subagent_requests": 10}
+2026-05-24 {"sessions": 22, "requests_top": 2766, "turns": 187, "subagent_calls": 8, "subagent_requests": 33}
+2026-05-25 {"sessions": 43, "requests_top": 2762, "turns": 167, "subagent_calls": 4, "subagent_requests": 36}
+2026-05-26 {"sessions": 21, "requests_top": 1974, "turns": 167, "subagent_calls": 1, "subagent_requests": 3}
+2026-05-27 {"sessions": 22, "requests_top": 2213, "turns": 168, "subagent_calls": 6, "subagent_requests": 39}
+2026-05-28 {"sessions": 8, "requests_top": 1342, "turns": 101, "subagent_calls": 2, "subagent_requests": 11}
+2026-05-29 {"sessions": 16, "requests_top": 1019, "turns": 112}
+2026-05-30 {"sessions": 3, "requests_top": 528, "turns": 31, "subagent_calls": 14, "subagent_requests": 101}
+2026-05-31 {"sessions": 11, "requests_top": 721, "turns": 50, "subagent_calls": 7, "subagent_requests": 139}
+2026-06-01 {"sessions": 8, "requests_top": 1489, "turns": 56, "subagent_calls": 1, "subagent_requests": 3}
+2026-06-02 {"sessions": 7, "requests_top": 687, "turns": 61}
+2026-06-03 {"sessions": 13, "requests_top": 2216, "turns": 120, "subagent_calls": 2, "subagent_requests": 17}
+2026-06-04 {"sessions": 3, "requests_top": 394, "turns": 13}
+2026-06-05 {"sessions": 18, "requests_top": 1141, "turns": 159, "subagent_calls": 1, "subagent_requests": 8}
+2026-06-06 {"sessions": 5, "requests_top": 509, "turns": 26}
+2026-06-07 {"sessions": 13, "requests_top": 1515, "turns": 47}
+2026-06-08 {"sessions": 6, "requests_top": 1767, "turns": 68}
+2026-06-09 {"sessions": 15, "requests_top": 739, "turns": 81}
+2026-06-10 {"sessions": 11, "requests_top": 921, "turns": 71}
+2026-06-11 {"sessions": 15, "requests_top": 821, "turns": 63}
+2026-06-12 {"sessions": 12, "requests_top": 678, "turns": 75}
+2026-06-13 {"sessions": 8, "requests_top": 418, "turns": 32}
+2026-06-14 {"sessions": 8, "requests_top": 1060, "turns": 42}
+2026-06-15 {"sessions": 13, "requests_top": 1069, "turns": 60, "subagent_calls": 1, "subagent_requests": 21}
+2026-06-16 {"sessions": 9, "requests_top": 1214, "turns": 87}
+2026-06-17 {"sessions": 20, "requests_top": 1339, "turns": 81, "subagent_calls": 2, "subagent_requests": 22}
+2026-06-18 {"sessions": 108, "requests_top": 7802, "turns": 238}
+2026-06-19 {"sessions": 46, "requests_top": 3706, "turns": 295}
+2026-06-20 {"sessions": 271, "requests_top": 19419, "turns": 678, "subagent_calls": 1, "subagent_requests": 7}
+2026-06-20 {"sessions": 3, "requests_top": 165, "turns": 8}
+2026-06-21 {"sessions": 154, "requests_top": 9254, "turns": 409, "subagent_calls": 3, "subagent_requests": 61}
+2026-06-22 {"sessions": 50, "requests_top": 3922, "turns": 286}
+2026-06-23 {"sessions": 140, "requests_top": 10711, "turns": 378}
+2026-06-24 {"sessions": 148, "requests_top": 12193, "turns": 493, "subagent_calls": 4, "subagent_requests": 31, "negative_round_ms": 2}
+2026-06-25 {"sessions": 57, "requests_top": 6527, "turns": 238, "subagent_calls": 10, "subagent_requests": 84}
+2026-06-26 {"sessions": 66, "requests_top": 6306, "turns": 417, "subagent_calls": 9, "subagent_requests": 32}
+2026-06-27 {"sessions": 54, "requests_top": 6887, "turns": 444, "subagent_calls": 17, "subagent_requests": 137}
+2026-06-28 {"sessions": 81, "requests_top": 8982, "turns": 435, "subagent_calls": 6, "subagent_requests": 66}
+2026-06-29 {"sessions": 67, "requests_top": 9410, "turns": 469, "subagent_calls": 13, "subagent_requests": 164}
+2026-06-30 {"sessions": 72, "requests_top": 4952, "turns": 356, "subagent_calls": 20, "subagent_requests": 243}
+2026-07-01 {"sessions": 46, "requests_top": 5322, "turns": 218, "subagent_calls": 11, "subagent_requests": 378}
+2026-07-02 {"sessions": 80, "requests_top": 5701, "turns": 339, "subagent_calls": 19, "subagent_requests": 375}
+2026-07-03 {"sessions": 87, "requests_top": 5711, "turns": 411, "subagent_calls": 33, "subagent_requests": 490}
+2026-07-04 {"sessions": 59, "requests_top": 8454, "turns": 472, "subagent_calls": 34, "subagent_requests": 367}
+2026-07-04 {"sessions": 1, "requests_top": 208, "turns": 22}
+2026-07-05 {"sessions": 68, "requests_top": 8303, "turns": 391, "subagent_calls": 25, "subagent_requests": 322}
+2026-07-06 {"sessions": 462, "requests_top": 26661, "turns": 1186, "subagent_calls": 39, "subagent_requests": 644}
+2026-07-07 {"sessions": 58, "requests_top": 6579, "turns": 426, "subagent_calls": 24, "subagent_requests": 644}
+2026-07-08 {"sessions": 64, "requests_top": 6783, "turns": 472, "subagent_calls": 27, "subagent_requests": 176}
+2026-07-09 {"sessions": 59, "requests_top": 6884, "turns": 659, "subagent_calls": 21, "subagent_requests": 247}
+2026-07-10 {"sessions": 61, "requests_top": 4627, "turns": 487, "subagent_calls": 1, "subagent_requests": 31}
+2026-07-11 {"sessions": 59, "requests_top": 6033, "turns": 361, "subagent_calls": 9, "subagent_requests": 160}
+2026-07-11 {"sessions": 2, "requests_top": 1010, "turns": 17, "subagent_calls": 1, "subagent_requests": 17}
+2026-07-12 {"sessions": 84, "requests_top": 6096, "turns": 559, "subagent_calls": 9, "subagent_requests": 80}
+2026-07-13 {"sessions": 92, "requests_top": 7288, "turns": 647, "subagent_calls": 23, "subagent_requests": 112}
+2026-07-14 {"sessions": 73, "requests_top": 9770, "turns": 569, "subagent_calls": 20, "subagent_requests": 137}
+2026-07-15 {"sessions": 102, "requests_top": 7618, "turns": 602, "subagent_calls": 31, "subagent_requests": 431}
+2026-07-16 {"sessions": 96, "requests_top": 10214, "turns": 848, "subagent_calls": 43, "subagent_requests": 733}
+2026-07-17 {"sessions": 147, "requests_top": 16706, "turns": 1449, "subagent_calls": 59, "subagent_requests": 1499}
+2026-07-18 {"sessions": 103, "requests_top": 9071, "turns": 926, "subagent_calls": 84, "subagent_requests": 1243}
+2026-07-19 {"sessions": 127, "requests_top": 18325, "turns": 1427, "subagent_calls": 41, "subagent_requests": 937}
+2026-07-20 {"sessions": 112, "requests_top": 10623, "turns": 739, "subagent_calls": 36, "subagent_requests": 318}
+2026-07-21 {"sessions": 99, "requests_top": 6222, "turns": 611, "subagent_calls": 9, "subagent_requests": 51}
+2026-07-22 {"sessions": 126, "requests_top": 17402, "turns": 1141, "subagent_calls": 15, "subagent_requests": 373}
+2026-07-23 {"sessions": 114, "requests_top": 6189, "turns": 629, "subagent_calls": 7, "subagent_requests": 225}
+2026-07-24 {"sessions": 117, "requests_top": 10279, "turns": 758, "subagent_calls": 24, "subagent_requests": 276}
+2026-07-25 {"sessions": 91, "requests_top": 7473, "turns": 670, "subagent_calls": 9, "subagent_requests": 111}
+2026-07-25 {"sessions": 1, "requests_top": 88, "subagent_calls": 1, "subagent_requests": 13, "turns": 3}
+2026-07-26 {"sessions": 179, "requests_top": 18128, "turns": 1187, "subagent_calls": 45, "subagent_requests": 740}
+2026-07-27 {"sessions": 148, "requests_top": 12874, "turns": 859, "subagent_calls": 72, "subagent_requests": 1057}
+2026-07-28 {"sessions": 148, "requests_top": 12716, "turns": 1172, "subagent_calls": 22, "subagent_requests": 208}
+2026-07-29 {"sessions": 84, "requests_top": 8519, "turns": 703, "subagent_calls": 22, "subagent_requests": 207}
+2026-07-30 {"sessions": 132, "requests_top": 12961, "turns": 909, "subagent_calls": 31, "subagent_requests": 797}
+2026-07-31 {"sessions": 110, "requests_top": 6786, "turns": 729, "subagent_calls": 36, "subagent_requests": 446}
+2026-08-01 {"sessions": 128, "requests_top": 7698, "turns": 705, "subagent_calls": 39, "subagent_requests": 1286}
+2026-08-01 {"sessions": 1, "requests_top": 133, "turns": 3}
+2026-08-02 {"sessions": 142, "requests_top": 10202, "turns": 954, "subagent_calls": 30, "subagent_requests": 734}
+2026-08-03 {"sessions": 148, "requests_top": 16749, "turns": 1111, "subagent_calls": 61, "subagent_requests": 841}
+2026-08-04 {"sessions": 173, "requests_top": 18557, "turns": 1183, "subagent_calls": 24, "subagent_requests": 360}
+2026-08-05 {"sessions": 186, "requests_top": 13518, "turns": 1279, "subagent_calls": 11, "subagent_requests": 182}
+2026-08-06 {"sessions": 147, "requests_top": 15107, "turns": 1252, "subagent_calls": 16, "subagent_requests": 118}
+2026-08-07 {"sessions": 34, "requests_top": 3045, "turns": 186}
+2026-08-08 {"sessions": 3, "requests_top": 196, "turns": 16}
+2026-08-09 {"sessions": 214, "requests_top": 32742, "turns": 2260, "subagent_calls": 34, "subagent_requests": 558}
+2026-08-10 {"sessions": 210, "requests_top": 26025, "turns": 1809, "subagent_calls": 32, "subagent_requests": 294}
+2026-08-11 {"sessions": 194, "requests_top": 24695, "turns": 1631, "subagent_calls": 30, "subagent_requests": 372}
+2026-08-12 {"sessions": 233, "requests_top": 19659, "turns": 1717, "subagent_calls": 20, "subagent_requests": 501}
+2026-08-13 {"sessions": 201, "requests_top": 23631, "turns": 1417, "subagent_calls": 10, "subagent_requests": 159}
+2026-08-14 {"sessions": 146, "requests_top": 16842, "turns": 1230, "subagent_calls": 23, "subagent_requests": 569}
+2026-08-15 {"sessions": 152, "requests_top": 16273, "turns": 1027, "subagent_calls": 56, "subagent_requests": 1454}
+2026-08-15 {"sessions": 4, "requests_top": 98, "turns": 9}
+2026-08-16 {"sessions": 164, "requests_top": 18864, "turns": 1264, "subagent_calls": 22, "subagent_requests": 828}
+2026-08-17 {"sessions": 174, "requests_top": 18667, "turns": 1577, "subagent_calls": 73, "subagent_requests": 2140}
+2026-08-18 {"sessions": 190, "requests_top": 23696, "turns": 1488, "subagent_calls": 25, "subagent_requests": 925}
+2026-08-19 {"sessions": 213, "requests_top": 19339, "turns": 1563, "subagent_calls": 11, "subagent_requests": 196}
+2026-08-20 {"sessions": 201, "requests_top": 24323, "turns": 1654, "subagent_calls": 14, "subagent_requests": 347}
+2026-08-21 {"sessions": 202, "requests_top": 19658, "turns": 1792, "subagent_calls": 31, "subagent_requests": 824}
+2026-08-22 {"sessions": 159, "requests_top": 13998, "turns": 998, "subagent_calls": 22, "subagent_requests": 324}
+2026-08-23 {"sessions": 166, "requests_top": 20754, "subagent_calls": 27, "subagent_requests": 688, "turns": 1352}
+2026-08-24 {"sessions": 174, "requests_top": 18592, "turns": 1573, "subagent_calls": 20, "subagent_requests": 157}
+2026-08-25 {"sessions": 234, "requests_top": 29131, "turns": 3425, "subagent_calls": 22, "subagent_requests": 432}
+2026-08-26 {"sessions": 227, "requests_top": 27977, "turns": 2506, "subagent_calls": 32, "subagent_requests": 716}
+2026-08-27 {"sessions": 248, "requests_top": 21105, "turns": 1484, "subagent_calls": 15, "subagent_requests": 338}
+2026-08-28 {"sessions": 190, "requests_top": 20160, "turns": 1343, "subagent_calls": 23, "subagent_requests": 495}
+2026-08-29 {"sessions": 194, "requests_top": 18594, "turns": 1259, "subagent_calls": 36, "subagent_requests": 786}
+2026-08-29 {"sessions": 4, "requests_top": 262, "turns": 48, "subagent_calls": 3, "subagent_requests": 26}
+2026-08-30 {"sessions": 256, "requests_top": 29926, "turns": 2338, "subagent_calls": 32, "subagent_requests": 890}
+2026-08-31 {"sessions": 252, "requests_top": 31742, "turns": 2151, "subagent_calls": 27, "subagent_requests": 734, "negative_round_ms": 1}
+2026-09-01 {"sessions": 275, "requests_top": 23958, "turns": 1718, "subagent_calls": 50, "subagent_requests": 586}
+2,171,252 rows, 10,983 sessions -> data/freeinference/dag_all/online_rows.csv.gz
+admitted requests: fit 544,915 (inner 459,710, choosing 28,402), scored 159,965 (2026-08-09 to 2026-08-15)
+
+== rem_work_s
+  choose  step only (baseline)   CRPS    178.74  sigma 1.46
+  choose  cat                    CRPS    175.75  sigma 1.43
+  choose  cat+harness            CRPS    171.52  sigma 1.40
+  choose  cat+width              CRPS    175.61  sigma 1.43
+  choose  cat+hist               CRPS    172.84  sigma 1.40
+  choose  cat+stall              CRPS    174.81  sigma 1.43
+  choose  cat+result             CRPS    174.71  sigma 1.42
+  choose  cat+hist+result        CRPS    172.29  sigma 1.40
+  chosen: cat+harness
+  turn start (step 0)  model n= 11,100  sigma 1.56 (robust 1.60)  typical x2.94  within 2x  33%  rank r 0.11  below p10/50/90 5/42/87%  median actual 59.10
+  turn start (step 0)  base  n= 11,100  sigma 1.56 (robust 1.60)  typical x2.94  within 2x  33%  rank r -0.05  below p10/50/90 5/39/88%  median actual 59.10
+  steps 1-2            model n= 16,678  sigma 1.51 (robust 1.53)  typical x2.81  within 2x  35%  rank r 0.21  below p10/50/90 5/43/88%  median actual 71.53
+  steps 1-2            base  n= 16,678  sigma 1.54 (robust 1.58)  typical x2.90  within 2x  34%  rank r 0.02  below p10/50/90 5/43/88%  median actual 71.53
+  steps 3-9            model n= 36,218  sigma 1.45 (robust 1.49)  typical x2.74  within 2x  35%  rank r 0.21  below p10/50/90 7/46/88%  median actual 93.03
+  steps 3-9            base  n= 36,218  sigma 1.48 (robust 1.53)  typical x2.80  within 2x  35%  rank r 0.07  below p10/50/90 7/46/88%  median actual 93.03
+  steps 10+            model n= 95,969  sigma 1.34 (robust 1.38)  typical x2.54  within 2x  38%  rank r 0.32  below p10/50/90 7/45/87%  median actual 198.57
+  steps 10+            base  n= 95,969  sigma 1.37 (robust 1.42)  typical x2.61  within 2x  37%  rank r 0.25  below p10/50/90 7/45/87%  median actual 198.57
+  all requests         model n=159,965  sigma 1.40 (robust 1.44)  typical x2.63  within 2x  37%  rank r 0.38  below p10/50/90 7/45/87%  median actual 138.79
+  all requests         base  n=159,965  sigma 1.43 (robust 1.48)  typical x2.70  within 2x  36%  rank r 0.34  below p10/50/90 6/44/87%  median actual 138.79
+
+== rem_path_s
+  choose  step only (baseline)   CRPS    488.31  sigma 1.66
+  choose  cat                    CRPS    484.37  sigma 1.64
+  choose  cat+harness            CRPS    483.88  sigma 1.61
+  choose  cat+width              CRPS    484.76  sigma 1.64
+  choose  cat+hist               CRPS    478.67  sigma 1.61
+  choose  cat+stall              CRPS    484.14  sigma 1.63
+  choose  cat+result             CRPS    483.05  sigma 1.63
+  choose  cat+hist+result        CRPS    480.13  sigma 1.61
+  chosen: cat+hist
+  turn start (step 0)  model n= 11,100  sigma 1.72 (robust 1.70)  typical x3.15  within 2x  31%  rank r 0.23  below p10/50/90 6/42/87%  median actual 93.34
+  turn start (step 0)  base  n= 11,100  sigma 1.79 (robust 1.81)  typical x3.39  within 2x  30%  rank r -0.06  below p10/50/90 6/42/88%  median actual 93.34
+  steps 1-2            model n= 16,678  sigma 1.69 (robust 1.69)  typical x3.12  within 2x  32%  rank r 0.29  below p10/50/90 5/43/88%  median actual 119.18
+  steps 1-2            base  n= 16,678  sigma 1.76 (robust 1.75)  typical x3.27  within 2x  31%  rank r 0.01  below p10/50/90 5/45/88%  median actual 119.18
+  steps 3-9            model n= 36,218  sigma 1.65 (robust 1.64)  typical x3.02  within 2x  33%  rank r 0.26  below p10/50/90 7/46/88%  median actual 167.65
+  steps 3-9            base  n= 36,218  sigma 1.70 (robust 1.69)  typical x3.13  within 2x  31%  rank r 0.07  below p10/50/90 8/47/89%  median actual 167.65
+  steps 10+            model n= 95,969  sigma 1.59 (robust 1.54)  typical x2.82  within 2x  35%  rank r 0.34  below p10/50/90 7/44/88%  median actual 417.97
+  steps 10+            base  n= 95,969  sigma 1.62 (robust 1.59)  typical x2.93  within 2x  34%  rank r 0.27  below p10/50/90 8/45/88%  median actual 417.97
+  all requests         model n=159,965  sigma 1.62 (robust 1.59)  typical x2.92  within 2x  34%  rank r 0.42  below p10/50/90 7/44/88%  median actual 273.77
+  all requests         base  n=159,965  sigma 1.67 (robust 1.64)  typical x3.03  within 2x  33%  rank r 0.36  below p10/50/90 7/45/88%  median actual 273.77
+
+== rem_after
+  choose  step only (baseline)   CRPS     16.67  sigma 1.26
+  choose  cat                    CRPS     16.34  sigma 1.24
+  choose  cat+harness            CRPS     16.04  sigma 1.23
+  choose  cat+width              CRPS     16.36  sigma 1.24
+  choose  cat+hist               CRPS     15.95  sigma 1.23
+  choose  cat+stall              CRPS     16.28  sigma 1.24
+  choose  cat+result             CRPS     16.32  sigma 1.24
+  choose  cat+hist+result        CRPS     15.95  sigma 1.22
+  chosen: cat+hist+result
+  turn start (step 0)  model n= 11,100  sigma 1.24 (robust 1.50)  typical x2.75  within 2x  36%  rank r 0.30  below p10/50/90 0/43/89%  median actual 4.00
+  turn start (step 0)  base  n= 11,100  sigma 1.31 (robust 1.36)  typical x2.50  within 2x  34%  rank r 0.03  below p10/50/90 0/45/91%  median actual 4.00
+  steps 1-2            model n= 16,678  sigma 1.22 (robust 1.36)  typical x2.50  within 2x  38%  rank r 0.32  below p10/50/90 2/45/89%  median actual 6.00
+  steps 1-2            base  n= 16,678  sigma 1.29 (robust 1.45)  typical x2.67  within 2x  34%  rank r 0.05  below p10/50/90 0/46/91%  median actual 6.00
+  steps 3-9            model n= 36,218  sigma 1.24 (robust 1.32)  typical x2.44  within 2x  38%  rank r 0.29  below p10/50/90 4/49/90%  median actual 9.00
+  steps 3-9            base  n= 36,218  sigma 1.29 (robust 1.36)  typical x2.50  within 2x  37%  rank r 0.09  below p10/50/90 7/51/92%  median actual 9.00
+  steps 10+            model n= 95,969  sigma 1.23 (robust 1.23)  typical x2.29  within 2x  42%  rank r 0.37  below p10/50/90 8/49/90%  median actual 22.00
+  steps 10+            base  n= 95,969  sigma 1.28 (robust 1.26)  typical x2.33  within 2x  41%  rank r 0.28  below p10/50/90 9/52/91%  median actual 22.00
+  all requests         model n=159,965  sigma 1.24 (robust 1.26)  typical x2.34  within 2x  40%  rank r 0.47  below p10/50/90 6/48/90%  median actual 15.00
+  all requests         base  n=159,965  sigma 1.29 (robust 1.33)  typical x2.44  within 2x  39%  rank r 0.39  below p10/50/90 7/51/91%  median actual 15.00
+written /home/hice1/aghosh367/phase_aware_agent/results/summary/turn_forecast_7385784.json
+results: results/summary/turn_forecast_7385784.{txt,json}
+---------------------------------------
+Begin Slurm Epilog: Nov-27-2026 12:42:07
+Job ID:        7385784
+User ID:       aghosh367
+Account:       coc
+Job name:      paa-turnfc
+Resources:     cpu=4,mem=48G,node=1
+Rsrc Used:     cput=01:07:28,vmem=0,walltime=00:16:52,mem=3002192K,energy_used=0
+Partition:     ice-cpu
+QOS:           coc-ice
+Nodes:         atl1-1-01-005-1-2
+---------------------------------------

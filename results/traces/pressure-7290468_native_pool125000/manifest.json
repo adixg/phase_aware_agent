@@ -1,0 +1,28 @@
+{
+ "model": "Qwen/Qwen2.5-7B-Instruct",
+ "workload": "workloads/pressure_2026-08-16.json",
+ "workload_meta": {
+  "source": "FreeInference agentic trace (harvardMadsys/freeinference_agentic_trace, CC BY 4.0)",
+  "day": "2026-08-16",
+  "token_scale": 16.0,
+  "max_model_len": 32768,
+  "max_output": 1024,
+  "max_requests": 60,
+  "max_gap_s": 60.0,
+  "gap_scale": 0.0625,
+  "user_reply_s": 0.3125,
+  "window_s": 581.4,
+  "target_load": 0.9,
+  "slots": 8,
+  "sessions": 96,
+  "requests": 3936
+ },
+ "speedup": 1.0,
+ "limit_sessions": 0,
+ "mode": "native",
+ "pool_tokens": "125000",
+ "cpu_gb": "7",
+ "vllm_cmd": "vllm serve /home/hice1/aghosh367/scratch/hf_cache/hub/models--Qwen--Qwen2.5-7B-Instruct/snapshots/a09a35458c702b33eeacc393d103063234e8bc28/ --served-model-name Qwen/Qwen2.5-7B-Instruct --port 39225 --max-num-seqs 8 --max-model-len 32768 --num-gpu-blocks-override 7813 --gpu-memory-utilization 0.90 --enable-prompt-tokens-details --enable-prefix-caching --generation-config vllm --kv-transfer-config {\"kv_connector\":\"SimpleCPUOffloadConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"cpu_bytes_to_use\":7000000000}}",
+ "max_num_seqs": "8",
+ "complete": true
+}
